@@ -311,7 +311,7 @@ func (s *UseCase) Occupy(ctx context.Context, in OccupyRequest) (OccupyResponse,
 		gen := req.Generation + 1
 		retainedFailure := req.FailureReason
 		if req.Status == StatusReleased || req.Status == StatusFailed {
-			gen, retainedFailure = retryState(req.Generation, "")
+			gen, retainedFailure = retryState(req.Generation, req.FailureReason)
 		}
 		credID := s.newID("credential")
 		cred := &Credential{ID: credID, RequestID: req.ID, Generation: gen, Status: credentialActive, Version: 1, ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now}
