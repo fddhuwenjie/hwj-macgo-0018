@@ -150,7 +150,6 @@ func (s *Service) replayFile(path string, snapshot *Snapshot, result *RecoveryRe
 	reader := bufio.NewReader(file)
 	var applied int
 	truncated := false
-	firstInFile := true
 	for {
 		header := make([]byte, 24)
 		n, err := io.ReadFull(reader, header)
@@ -176,7 +175,7 @@ func (s *Service) replayFile(path string, snapshot *Snapshot, result *RecoveryRe
 		if snapshot != nil && rec.Version < snapshot.Version {
 			continue
 		}
-		if !journal.SequenceContinues(result.LastSequence, rec.Sequence, firstInFile) {
+		if !journal.SequenceContinues(result.LastSequence, rec.Sequence) {
 			truncated = true
 			break
 		}
@@ -186,7 +185,6 @@ func (s *Service) replayFile(path string, snapshot *Snapshot, result *RecoveryRe
 		}
 		result.LastSequence = rec.Sequence
 		applied++
-		firstInFile = false
 	}
 	if truncated {
 		if err := s.truncateFile(path); err != nil {

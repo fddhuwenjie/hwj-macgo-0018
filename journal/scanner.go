@@ -9,9 +9,12 @@ import (
 
 // SequenceContinues reports whether a record can follow the last record seen
 // while scanning a directory of journal segments.
-func SequenceContinues(previous, current uint64, firstInFile bool) bool {
-	if firstInFile {
-		return current == 1
+func SequenceContinues(previous, current uint64) bool {
+	if current == 0 {
+		return false
+	}
+	if previous == 0 {
+		return true
 	}
 	return current == previous+1
 }
