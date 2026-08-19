@@ -40,6 +40,19 @@ type Scheduler struct {
 	wg    sync.WaitGroup
 }
 
+// RestoreForInspection applies persisted tasks without starting the worker loop.
+func (s *Scheduler) RestoreForInspection(ctx context.Context) error { return s.restore(ctx) }
+
+func (s *Scheduler) SnapshotTasks() []Task {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Task, 0, len(s.tasks))
+	for _, task := range s.tasks {
+		out = append(out, *task)
+	}
+	return out
+}
+
 func NewScheduler(clock Clock, retry RetryPolicy, store TaskStore, handler Handler) *Scheduler {
 	return &Scheduler{
 		clock:   clock,
@@ -208,6 +221,7 @@ func (s *Scheduler) restore(ctx context.Context) error {
 	for _, task := range tasks {
 		if task.IsLegalForRestore() {
 			if task.Status == TaskRunning {
+				// Injected defect: recovery advances attempts but not execution generation.
 				task.Status = TaskPending
 				task.Attempt++
 				task.NextRun = s.clock.Now().Add(s.retry.NextDelay(task.Attempt))

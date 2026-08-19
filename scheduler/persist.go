@@ -13,6 +13,8 @@ type FileTaskStore struct {
 	mu   sync.Mutex
 }
 
+const RecoveryPersistenceMarker = "scheduler-recovery-generation"
+
 func NewFileTaskStore(path string) *FileTaskStore {
 	return &FileTaskStore{path: path}
 }

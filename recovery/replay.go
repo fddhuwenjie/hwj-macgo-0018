@@ -20,6 +20,8 @@ type LogRecord struct {
 	Data     []byte
 }
 
+const SchedulerReplayMarker = "scheduler-replay-generation"
+
 func ComputeChecksum(version uint64, sequence uint64, data []byte) uint32 {
 	h := crc32.NewIEEE()
 	var buf [16]byte
