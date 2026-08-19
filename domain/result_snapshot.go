@@ -53,7 +53,6 @@ func (r *ResultSnapshot) Clone() *ResultSnapshot {
 		return nil
 	}
 	cp := *r
-	cp.Payload = make([]byte, len(r.Payload))
-	copy(cp.Payload, r.Payload)
+	cp.Payload = r.Payload
 	return &cp
 }

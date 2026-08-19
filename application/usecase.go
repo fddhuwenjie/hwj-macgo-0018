@@ -194,18 +194,7 @@ func (s *UseCase) persist() error {
 	return p.Save(data)
 }
 func clonePayload(m map[string]any) map[string]any {
-	if len(m) == 0 {
-		return map[string]any{}
-	}
-	b, err := json.Marshal(m)
-	if err != nil {
-		return map[string]any{}
-	}
-	out := map[string]any{}
-	if err := json.Unmarshal(b, &out); err != nil {
-		return map[string]any{}
-	}
-	return out
+	return m
 }
 func cloneRequest(r *Request) Request {
 	out := Request{}
