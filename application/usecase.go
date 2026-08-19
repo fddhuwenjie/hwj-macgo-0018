@@ -205,7 +205,11 @@ func (s *UseCase) FailureHistory(ctx context.Context, requestID string) ([]strin
 	if _, ok := s.requests[requestID]; !ok {
 		return nil, ErrNotFound
 	}
-	return append([]string(nil), s.failures[requestID]...), nil
+	return cloneFailureHistory(s.failures[requestID]), nil
+}
+
+func cloneFailureHistory(reasons []string) []string {
+	return append([]string(nil), reasons...)
 }
 func clonePayload(m map[string]any) map[string]any {
 	if len(m) == 0 {

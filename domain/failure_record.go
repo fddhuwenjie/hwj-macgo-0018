@@ -62,6 +62,9 @@ func (f *FailureRecord) Clone() *FailureRecord {
 
 // CloneFailureReasons isolates the history map before persistence or return.
 func CloneFailureReasons(input map[string][]string) map[string][]string {
-	// BUG-18: the snapshot adapter drops all history before it reaches storage.
-	return map[string][]string{}
+	output := make(map[string][]string, len(input))
+	for requestID, reasons := range input {
+		output[requestID] = append([]string(nil), reasons...)
+	}
+	return output
 }
