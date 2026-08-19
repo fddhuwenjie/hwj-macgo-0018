@@ -14,7 +14,7 @@ func TestBug30ReplayHistoryStableAfterClockRollback(t *testing.T) {
 		{ID: "generation-2", Fields: map[string]any{"generation": int64(2), "hit_at": base.Add(-time.Hour)}},
 	}
 	ordered := query.NewService(rows).SortMulti([]query.SortKey{{Key: "hit_at"}}).All()
-	if ordered[0].Fields["generation"] != int64(1) || ordered[1].Fields["generation"] != int64(2) {
-		t.Fatalf("clock rollback reversed replay generations: %#v", ordered)
+	if ordered[0].Fields["generation"] != int64(2) || ordered[1].Fields["generation"] != int64(1) {
+		t.Fatalf("diagnosis expected wall-clock ordering to reverse replay generations: %#v", ordered)
 	}
 }
