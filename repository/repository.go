@@ -90,6 +90,17 @@ func applyVersion(existing Item, exists bool, item *Item) error {
 	return nil
 }
 func keyOf(kind, id string) string { return kind + "/" + id }
+func cloneMap(in map[string]any) map[string]any {
+	b, err := json.Marshal(in)
+	if err != nil {
+		return map[string]any{}
+	}
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil || out == nil {
+		return map[string]any{}
+	}
+	return out
+}
 func parseKey(key string) (string, string, bool) {
 	idx := 0
 	for i := 0; i < len(key); i++ {
@@ -460,6 +471,7 @@ type FileStore struct {
 	path   string
 	file   string
 	mem    *MemoryStore
+	data   map[string]any
 	mu     sync.Mutex
 	closed bool
 }
@@ -471,7 +483,7 @@ func NewFileStore(path string) (*FileStore, error) {
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		return nil, err
 	}
-	fs := &FileStore{path: path, file: filepath.Join(path, "repository.json"), mem: NewMemoryStore()}
+	fs := &FileStore{path: path, file: filepath.Join(path, "repository.json"), mem: NewMemoryStore(), data: map[string]any{}}
 	if err := fs.load(); err != nil {
 		return nil, err
 	}
@@ -485,16 +497,23 @@ func (f *FileStore) load() error {
 	if err != nil {
 		return err
 	}
-	var items map[string]map[string]Item
-	if err := json.Unmarshal(data, &items); err != nil {
+	var envelope struct {
+		Items map[string]map[string]Item `json:"items"`
+		Data  map[string]any             `json:"data"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
 		return err
 	}
+	items := envelope.Items
 	if items == nil {
 		items = map[string]map[string]Item{}
 	}
 	f.mem.mu.Lock()
 	f.mem.items = items
 	f.mem.mu.Unlock()
+	if envelope.Data != nil {
+		f.data = envelope.Data
+	}
 	return nil
 }
 func (f *FileStore) persistLocked() error {
@@ -502,7 +521,11 @@ func (f *FileStore) persistLocked() error {
 		return nil
 	}
 	f.mem.mu.RLock()
-	data, err := json.Marshal(f.mem.items)
+	envelope := struct {
+		Items map[string]map[string]Item `json:"items"`
+		Data  map[string]any             `json:"data"`
+	}{Items: f.mem.items, Data: f.data}
+	data, err := json.Marshal(envelope)
 	f.mem.mu.RUnlock()
 	if err != nil {
 		return err
@@ -527,11 +550,17 @@ func (f *FileStore) Save(data map[string]any) error {
 		f.mu.Unlock()
 		return err
 	}
+	f.data = cloneMap(data)
 	err := f.persistLocked()
 	f.mu.Unlock()
 	return err
 }
-func (f *FileStore) Load() (map[string]any, error) { return f.mem.Load() }
+func (f *FileStore) Load() (map[string]any, error) {
+	if len(f.data) > 0 {
+		return cloneMap(f.data), nil
+	}
+	return f.mem.Load()
+}
 func (f *FileStore) Get(ctx context.Context, kind, id string) (Item, error) {
 	return f.mem.Get(ctx, kind, id)
 }
@@ -582,8 +611,12 @@ func (f *FileStore) Begin(ctx context.Context) (Transaction, error) {
 func (f *FileStore) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.closed {
+		return nil
+	}
+	err := f.persistLocked()
 	f.closed = true
-	return f.persistLocked()
+	return err
 }
 
 type fileTransaction struct {

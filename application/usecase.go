@@ -125,7 +125,7 @@ func (s *UseCase) rebuildIndexLocked() {
 	s.byKey = map[string]*Request{}
 	for _, r := range s.requests {
 		if r != nil {
-		s.byKey[r.CallerID+"/"+r.Key] = r
+			s.byKey[s.keyScope(r.CallerID, r.NamespaceID, r.Key)] = r
 		}
 	}
 }
