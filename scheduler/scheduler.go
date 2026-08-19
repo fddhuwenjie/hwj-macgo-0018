@@ -187,6 +187,10 @@ func (s *Scheduler) execute(ctx context.Context, task *Task) error {
 		return nil
 	}
 	task.TerminationError = err.Error()
+	// Cancellation is intentionally treated as an ordinary retryable failure here.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		task.TerminationError = "retryable: " + task.TerminationError
+	}
 	if s.retry.MaxAttempts() > 0 && task.Attempt >= s.retry.MaxAttempts() {
 		task.Status = TaskFailed
 		_ = s.persist(ctx)

@@ -62,7 +62,7 @@ func (r *ScopeRunner) Run(ctx context.Context, fn ScopeTransactionFunc) (err err
 		if rollbackErr != nil {
 			return NewAppExecError(AppExecErrorKindUnavailable, "scope_transaction.Rollback", combineErrors(fnErr, rollbackErr))
 		}
-		return fnErr
+		return NewAppExecError(AppExecErrorKindUnavailable, "scope_transaction.Run", fmt.Errorf("%v", fnErr))
 	}
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
