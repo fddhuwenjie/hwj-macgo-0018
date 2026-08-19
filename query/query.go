@@ -21,7 +21,12 @@ func NewService(rows []Row) *Service {
 
 func (s *Service) All() []Row {
 	cp := make([]Row, len(s.rows))
-	copy(cp, s.rows) // Bug injection: row field maps remain shared.
+	for i, row := range s.rows {
+		// Copy the field map too, so callers mutating a returned row
+		// cannot corrupt the service's internal state.
+		cp[i] = row
+		cp[i].Fields = cloneFields(row.Fields)
+	}
 	return cp
 }
 
@@ -67,4 +72,15 @@ func (s *Service) SortBy(compare func(a, b Row) int) *Service {
 	})
 	s.rows = slice
 	return s
+}
+
+func cloneFields(fields map[string]any) map[string]any {
+	if fields == nil {
+		return nil
+	}
+	out := make(map[string]any, len(fields))
+	for k, v := range fields {
+		out[k] = v
+	}
+	return out
 }
