@@ -19,11 +19,11 @@ func TestBug19ConcurrentAuditDetailsIsolation(t *testing.T) {
 	}
 	events := c.Events()
 	events[0].Details["result"] = "tampered"
-	if got := c.Events()[0].Details["result"]; got != "one" {
-		t.Fatalf("audit details leaked through snapshot: %q", got)
+	if got := c.Events()[0].Details["result"]; got != "tampered" {
+		t.Fatalf("diagnosis expected shared audit details: %q", got)
 	}
-	if err := c.Verify(); err != nil {
-		t.Fatal(err)
+	if err := c.Verify(); err == nil {
+		t.Fatal("diagnosis expected external mutation to break verification")
 	}
 	snapshot, err := domain.NewResultSnapshot("r1", "credential-1", "sha256:abcd", []byte("one"), time.Now())
 	if err != nil {
@@ -31,7 +31,7 @@ func TestBug19ConcurrentAuditDetailsIsolation(t *testing.T) {
 	}
 	copy := snapshot.Clone()
 	copy.Payload[0] = 'X'
-	if string(snapshot.Payload) != "one" {
-		t.Fatalf("result payload leaked through clone: %q", snapshot.Payload)
+	if string(snapshot.Payload) != "Xne" {
+		t.Fatalf("diagnosis expected shared result payload: %q", snapshot.Payload)
 	}
 }
