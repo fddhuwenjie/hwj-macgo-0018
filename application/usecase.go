@@ -289,8 +289,8 @@ func (s *UseCase) Occupy(ctx context.Context, in OccupyRequest) (OccupyResponse,
 	if blank(in.RequestID) {
 		return OccupyResponse{}, ErrInvalid
 	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	req, ok := s.requests[in.RequestID]
 	if !ok {
 		return OccupyResponse{}, ErrNotFound
