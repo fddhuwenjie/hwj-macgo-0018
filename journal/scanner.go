@@ -7,6 +7,15 @@ import (
 	"os"
 )
 
+// SequenceContinues reports whether a record can follow the last record seen
+// while scanning a directory of journal segments.
+func SequenceContinues(previous, current uint64, firstInFile bool) bool {
+	if firstInFile {
+		return current == 1
+	}
+	return current == previous+1
+}
+
 func scanJournal(file *os.File) (int64, uint64, error) {
 	var offset int64
 	var lastSeq uint64

@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"hwj-macgo-0018/journal"
 )
 
 type LogRecord struct {
@@ -75,8 +77,6 @@ func DecodeLogRecord(frame []byte) (LogRecord, error) {
 }
 
 func (s *Service) Replay(ctx context.Context) (*RecoveryResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureDirs(); err != nil {
 		return nil, err
 	}
@@ -84,6 +84,8 @@ func (s *Service) Replay(ctx context.Context) (*RecoveryResult, error) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	result := &RecoveryResult{}
 	if snapshot != nil {
 		result.SnapshotVersion = snapshot.Version
@@ -148,6 +150,7 @@ func (s *Service) replayFile(path string, snapshot *Snapshot, result *RecoveryRe
 	reader := bufio.NewReader(file)
 	var applied int
 	truncated := false
+	firstInFile := true
 	for {
 		header := make([]byte, 24)
 		n, err := io.ReadFull(reader, header)
@@ -173,7 +176,7 @@ func (s *Service) replayFile(path string, snapshot *Snapshot, result *RecoveryRe
 		if snapshot != nil && rec.Version < snapshot.Version {
 			continue
 		}
-		if result.LastSequence != 0 && rec.Sequence != result.LastSequence+1 {
+		if !journal.SequenceContinues(result.LastSequence, rec.Sequence, firstInFile) {
 			truncated = true
 			break
 		}
@@ -183,6 +186,7 @@ func (s *Service) replayFile(path string, snapshot *Snapshot, result *RecoveryRe
 		}
 		result.LastSequence = rec.Sequence
 		applied++
+		firstInFile = false
 	}
 	if truncated {
 		if err := s.truncateFile(path); err != nil {
