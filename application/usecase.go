@@ -593,6 +593,9 @@ func (s *UseCase) QueryRequests(ctx context.Context, q QueryRequest) (QueryRespo
 		if items[i].Key != items[j].Key {
 			return items[i].Key < items[j].Key
 		}
+		if items[i].Version != items[j].Version {
+			return items[i].Version > items[j].Version
+		}
 		return items[i].ID < items[j].ID
 	})
 	total := len(items)

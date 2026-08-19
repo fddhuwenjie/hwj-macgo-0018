@@ -31,6 +31,11 @@ func (s *Service) SortMulti(keys []SortKey) *Service {
 			}
 			return cmp < 0
 		}
+		iv := toInt64(slice[i].Fields["version"])
+		jv := toInt64(slice[j].Fields["version"])
+		if iv != jv {
+			return iv > jv
+		}
 		return slice[i].ID < slice[j].ID
 	})
 	s.rows = slice
