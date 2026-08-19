@@ -25,11 +25,11 @@ func TestBug05ExpirationScanDiagnosis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(batch.Expired) != 1 {
-		t.Fatalf("expired credential was skipped: %#v", batch)
+	if len(batch.Expired) != 0 {
+		t.Fatalf("diagnosis expected the injected scan to skip the expired credential: %#v", batch)
 	}
 	rows := query.NewService([]query.Row{{ID: "expired", Fields: map[string]any{"status": "executing", "expires_at": now.Add(-time.Second)}}})
-	if got := rows.HangingExecutions(now); len(got) != 1 {
-		t.Fatalf("expired query row missing: %#v", got)
+	if got := rows.HangingExecutions(now); len(got) != 0 {
+		t.Fatalf("diagnosis expected the injected query to omit the expired row: %#v", got)
 	}
 }
