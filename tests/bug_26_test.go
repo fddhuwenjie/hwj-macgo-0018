@@ -12,6 +12,9 @@ func TestBug26FailureAggregationByGenerationDiagnosis(t *testing.T) {
 	}
 	groups := query.NewService(rows).ConflictRequests()
 	if len(groups) != 2 {
-		t.Fatalf("failure history merged generations into %d aggregate(s)", len(groups))
+		t.Fatalf("expected one failure aggregate per generation, got %d", len(groups))
+	}
+	if groups[0].Generation == groups[1].Generation {
+		t.Fatalf("failure aggregates lost generation boundary: %#v", groups)
 	}
 }

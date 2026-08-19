@@ -37,6 +37,16 @@ func NewFailureRecord(id, credentialID, reason string, attempt int, now time.Tim
 	}, nil
 }
 
+// NewFailureRecordAtGeneration records the execution generation at the write boundary.
+func NewFailureRecordAtGeneration(id, credentialID, reason string, attempt int, generation uint64, now time.Time) (*FailureRecord, error) {
+	record, err := NewFailureRecord(id, credentialID, reason, attempt, now)
+	if err != nil {
+		return nil, err
+	}
+	record.Generation = generation
+	return record, nil
+}
+
 func (f *FailureRecord) Validate() error {
 	if err := ValidateIDString(f.ID); err != nil {
 		return err
@@ -50,6 +60,7 @@ func (f *FailureRecord) Validate() error {
 	if f.Attempt < 1 {
 		return ErrInvalidState
 	}
+	// Generation zero is the initial generation and remains valid for legacy records.
 	return nil
 }
 

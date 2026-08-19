@@ -3,6 +3,7 @@ package query
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,20 +27,43 @@ func (s *Service) ConflictRequests() []ConflictRequest {
 		caller := stringField(row, "caller")
 		namespace := stringField(row, "namespace")
 		key := stringField(row, "key")
+		generation := generationField(row)
 		if caller == "" || namespace == "" || key == "" {
 			continue
 		}
-		groups[caller+"\x00"+namespace+"\x00"+key]++
+		groups[caller+"\x00"+namespace+"\x00"+key+"\x00"+generation]++
 	}
 	out := make([]ConflictRequest, 0, len(groups))
 	for k, count := range groups {
 		parts := splitComposite(k)
-		if len(parts) != 3 {
+		if len(parts) != 4 {
 			continue
 		}
-		out = append(out, ConflictRequest{Caller: parts[0], Namespace: parts[1], Key: parts[2], Count: count})
+		parsedGeneration, _ := strconv.ParseUint(parts[3], 10, 64)
+		out = append(out, ConflictRequest{Caller: parts[0], Namespace: parts[1], Key: parts[2], Generation: parsedGeneration, Count: count})
 	}
 	return out
+}
+
+func generationField(row Row) string {
+	v, ok := row.Fields["generation"]
+	if !ok {
+		return "0"
+	}
+	switch value := v.(type) {
+	case uint64:
+		return strconv.FormatUint(value, 10)
+	case uint:
+		return strconv.FormatUint(uint64(value), 10)
+	case int:
+		return strconv.FormatInt(int64(value), 10)
+	case int64:
+		return strconv.FormatInt(value, 10)
+	case float64:
+		return strconv.FormatUint(uint64(value), 10)
+	default:
+		return fmt.Sprintf("%v", value)
+	}
 }
 
 func (s *Service) HangingExecutions(now time.Time) []Row {
