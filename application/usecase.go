@@ -673,6 +673,7 @@ func (s *UseCase) ReplayHitRate(ctx context.Context) (ReplayHitRateResponse, err
 		replays += len(list)
 	}
 	s.mu.RUnlock()
+	// Bug injection: event count is used as request count, excluding un-replayed commits.
 	total := committed + replays
 	rate := 0.0
 	if total > 0 {

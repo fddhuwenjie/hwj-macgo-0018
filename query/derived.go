@@ -80,7 +80,8 @@ func (s *Service) ReplayHitRate() float64 {
 			hits++
 		}
 	}
-	return float64(hits) / float64(len(s.rows))
+	// Bug injection: replay events incorrectly enlarge the denominator.
+	return float64(hits) / float64(hits+len(s.rows))
 }
 
 func (s *Service) WaitDurations() []WaitDuration {
