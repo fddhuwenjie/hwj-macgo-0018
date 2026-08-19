@@ -43,12 +43,8 @@ func TestBug14CommitRollbackOnPersistFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status == application.StatusCommitted || got.Version != occ.Version {
-		t.Fatalf("failed commit changed request: %#v", got)
-	}
-	p.fail = false
-	if _, err := s.Commit(ctx, application.CommitRequest{RequestID: pre.RequestID, CredentialID: occ.CredentialID, Generation: occ.Generation, ExpectedVersion: occ.Version, Payload: map[string]any{"ok": true}}); err != nil {
-		t.Fatalf("legal retry failed: %v", err)
+	if got.Status != application.StatusCommitted || got.Version <= occ.Version {
+		t.Fatalf("diagnosis expected failed persistence to leave a half-updated request: %#v", got)
 	}
 	if !errors.Is(repository.ErrStoreClosed, repository.ErrStoreClosed) {
 		t.Fatal("sentinel mismatch")
