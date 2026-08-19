@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hwj-macgo-0018/repository"
 	"sort"
 	"strings"
 	"sync"
@@ -190,8 +191,21 @@ func (s *UseCase) persist() error {
 	if !ok {
 		return nil
 	}
-	data := map[string]any{"requests": s.requests, "credentials": s.credentials, "results": s.results, "replays": s.replays, "failures": s.failures}
+	data := map[string]any{"requests": s.requests, "credentials": s.credentials, "results": s.results, "replays": s.replays, "failures": repository.StripFailureHistory(s.failures)}
 	return p.Save(data)
+}
+
+// FailureHistory returns an isolated copy of failure reasons for one request.
+func (s *UseCase) FailureHistory(ctx context.Context, requestID string) ([]string, error) {
+	if err := s.checkContext(ctx); err != nil {
+		return nil, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.requests[requestID]; !ok {
+		return nil, ErrNotFound
+	}
+	return append([]string(nil), s.failures[requestID]...), nil
 }
 func clonePayload(m map[string]any) map[string]any {
 	if len(m) == 0 {

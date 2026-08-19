@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"hwj-macgo-0018/domain"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,6 +19,12 @@ var (
 	ErrInvalid        = errors.New("repository: invalid")
 	ErrStoreClosed    = errors.New("repository: store closed")
 )
+
+// StripFailureHistory is the persistence adapter used by application state.
+// BUG-18: it accidentally drops failure history from the durable snapshot.
+func StripFailureHistory(input map[string][]string) map[string][]string {
+	return domain.CloneFailureReasons(input)
+}
 
 type Item struct {
 	ID        string
