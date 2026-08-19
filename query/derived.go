@@ -3,7 +3,7 @@ package query
 import (
 	"fmt"
 	"sort"
-	"strings"
+	"strconv"
 	"time"
 )
 
@@ -13,6 +13,7 @@ type ConflictRequest struct {
 	Key        string
 	Count      int
 	Generation uint64
+	Reasons    []string
 }
 
 type WaitDuration struct {
@@ -21,7 +22,22 @@ type WaitDuration struct {
 }
 
 func (s *Service) ConflictRequests() []ConflictRequest {
-	groups := make(map[string]int)
+	type group struct {
+		caller     string
+		namespace  string
+		key        string
+		generation uint64
+		count      int
+		reasons    []string
+		seen       map[string]struct{}
+	}
+	// Group by caller+namespace+key+generation so each execution generation
+	// survives aggregation as its own row instead of being merged into a
+	// single count. The generation is carried by the failure record and must
+	// be threaded through here; otherwise two failures from different
+	// generations collapse into one aggregate and the per-generation reason
+	// is lost, even after the store is reopened.
+	groups := make(map[string]*group)
 	for _, row := range s.rows {
 		caller := stringField(row, "caller")
 		namespace := stringField(row, "namespace")
@@ -29,16 +45,50 @@ func (s *Service) ConflictRequests() []ConflictRequest {
 		if caller == "" || namespace == "" || key == "" {
 			continue
 		}
-		groups[caller+"\x00"+namespace+"\x00"+key]++
+		generation := uint64Field(row, "generation")
+		gk := caller + "\x00" + namespace + "\x00" + key + "\x00" + strconv.FormatUint(generation, 10)
+		g, ok := groups[gk]
+		if !ok {
+			g = &group{
+				caller:     caller,
+				namespace:  namespace,
+				key:        key,
+				generation: generation,
+				seen:       make(map[string]struct{}),
+			}
+			groups[gk] = g
+		}
+		g.count++
+		if reason := stringField(row, "reason"); reason != "" {
+			if _, dup := g.seen[reason]; !dup {
+				g.seen[reason] = struct{}{}
+				g.reasons = append(g.reasons, reason)
+			}
+		}
 	}
 	out := make([]ConflictRequest, 0, len(groups))
-	for k, count := range groups {
-		parts := splitComposite(k)
-		if len(parts) != 3 {
-			continue
-		}
-		out = append(out, ConflictRequest{Caller: parts[0], Namespace: parts[1], Key: parts[2], Count: count})
+	for _, g := range groups {
+		out = append(out, ConflictRequest{
+			Caller:     g.caller,
+			Namespace:  g.namespace,
+			Key:        g.key,
+			Count:      g.count,
+			Generation: g.generation,
+			Reasons:    g.reasons,
+		})
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Caller != out[j].Caller {
+			return out[i].Caller < out[j].Caller
+		}
+		if out[i].Namespace != out[j].Namespace {
+			return out[i].Namespace < out[j].Namespace
+		}
+		if out[i].Key != out[j].Key {
+			return out[i].Key < out[j].Key
+		}
+		return out[i].Generation < out[j].Generation
+	})
 	return out
 }
 
@@ -141,6 +191,38 @@ func boolField(row Row, key string) bool {
 	return false
 }
 
-func splitComposite(s string) []string {
-	return strings.Split(s, "\x00")
+func uint64Field(row Row, key string) uint64 {
+	v, ok := row.Fields[key]
+	if !ok {
+		return 0
+	}
+	switch n := v.(type) {
+	case uint64:
+		return n
+	case uint:
+		return uint64(n)
+	case int:
+		if n < 0 {
+			return 0
+		}
+		return uint64(n)
+	case int64:
+		if n < 0 {
+			return 0
+		}
+		return uint64(n)
+	case float64:
+		if n < 0 {
+			return 0
+		}
+		return uint64(n)
+	case string:
+		parsed, err := strconv.ParseUint(n, 10, 64)
+		if err != nil {
+			return 0
+		}
+		return parsed
+	default:
+		return 0
+	}
 }
