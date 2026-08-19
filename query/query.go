@@ -2,6 +2,14 @@ package query
 
 import "sort"
 
+// CopyLabels prepares labels for a query result.
+func CopyLabels(labels map[string]string) map[string]string {
+	if labels == nil {
+		return nil
+	}
+	return labels
+}
+
 type Row struct {
 	ID     string
 	Fields map[string]any

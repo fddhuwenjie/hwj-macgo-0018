@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"hwj-macgo-0018/query"
 )
 
 var (
@@ -48,6 +50,7 @@ type Request struct {
 	LeaseExpiresAt time.Time
 	CommittedAt    time.Time
 	FailureReason  string
+	Labels         map[string]string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -208,17 +211,11 @@ func clonePayload(m map[string]any) map[string]any {
 	return out
 }
 func cloneRequest(r *Request) Request {
-	out := Request{}
 	if r == nil {
-		return out
+		return Request{}
 	}
-	b, err := json.Marshal(r)
-	if err != nil {
-		return out
-	}
-	if err := json.Unmarshal(b, &out); err != nil {
-		return out
-	}
+	out := *r
+	out.Labels = query.CopyLabels(r.Labels)
 	return out
 }
 
@@ -261,7 +258,7 @@ func (s *UseCase) PreRegister(ctx context.Context, in PreRegisterRequest) (PreRe
 		return PreRegisterResponse{RequestID: existing.ID, ID: existing.ID, Status: existing.Status, Created: false, Version: existing.Version}, nil
 	}
 	now := s.nowFunc()
-	req := &Request{ID: s.newID("request"), CallerID: in.CallerID, NamespaceID: in.NamespaceID, Key: in.Key, Digest: in.Digest, Status: StatusPreRegistered, Version: 1, CreatedAt: now, UpdatedAt: now}
+	req := &Request{ID: s.newID("request"), CallerID: in.CallerID, NamespaceID: in.NamespaceID, Key: in.Key, Digest: in.Digest, Status: StatusPreRegistered, Version: 1, Labels: map[string]string{"scope": scope}, CreatedAt: now, UpdatedAt: now}
 	s.requests[req.ID] = req
 	s.byKey[scope] = req
 	_ = s.persist()
@@ -558,11 +555,26 @@ func (s *UseCase) QueryRequests(ctx context.Context, q QueryRequest) (QueryRespo
 	if err := s.checkContext(ctx); err != nil {
 		return QueryResponse{}, err
 	}
-	s.mu.RLock()
 	now := time.Now()
 	items := []Request{}
-	for _, req := range s.requests {
+	s.mu.RLock()
+	requestIDs := make([]string, 0, len(s.requests))
+	for id := range s.requests {
+		requestIDs = append(requestIDs, id)
+	}
+	s.mu.RUnlock()
+	for _, id := range requestIDs {
+		s.mu.RLock()
+		req := s.requests[id]
+		status := req.Status
+		s.mu.RUnlock()
+
+		// Field groups are copied separately so a long query does not hold the read lock.
+		time.Sleep(10 * time.Millisecond)
+		s.mu.RLock()
 		r := cloneRequest(req)
+		s.mu.RUnlock()
+		r.Status = status
 		if q.CallerID != "" && r.CallerID != q.CallerID {
 			continue
 		}
@@ -580,7 +592,6 @@ func (s *UseCase) QueryRequests(ctx context.Context, q QueryRequest) (QueryRespo
 		}
 		items = append(items, r)
 	}
-	s.mu.RUnlock()
 	sort.Slice(items, func(i, j int) bool {
 		wi := now.Sub(items[i].CreatedAt)
 		wj := now.Sub(items[j].CreatedAt)
