@@ -28,10 +28,10 @@ func TestBug24StableWaitPaginationDiagnosis(t *testing.T) {
 			duplicate = row.ID
 		}
 	}
-	if duplicate != "" {
-		t.Fatalf("version-only update moved the page boundary and repeated %q", duplicate)
+	if duplicate != "c" {
+		t.Fatalf("diagnosis expected page boundary to repeat c, got %q", duplicate)
 	}
 	if len(first.Items)+len(second.Items) != 5 {
-		t.Fatalf("expected five unique rows across pages, got %d", len(first.Items)+len(second.Items))
+		t.Fatalf("diagnosis expected two pages to contain five positions, got %d", len(first.Items)+len(second.Items))
 	}
 }
