@@ -52,8 +52,14 @@ func (l *Lease) Validate() error {
 	return nil
 }
 
+// IsExpired reports whether the lease has reached its deadline at now.
+//
+// Boundary: a lease is usable while now is strictly before its deadline and is
+// expired once the deadline has been reached or passed, i.e. expired iff
+// now >= ExpiresAt. The boundary is inclusive on the expired side so that the
+// deadline instant is never treated as still usable.
 func (l *Lease) IsExpired(now time.Time) bool {
-	return now.Before(l.ExpiresAt)
+	return !now.Before(l.ExpiresAt)
 }
 
 func (l *Lease) Clone() *Lease {

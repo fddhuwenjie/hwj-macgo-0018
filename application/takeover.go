@@ -48,7 +48,7 @@ func (s *UseCase) TakeoverExpired(ctx context.Context, in TakeoverRequest) (Take
 		return TakeoverResponse{}, ErrNotFound
 	}
 	now := s.nowFunc()
-	if now.Before(old.ExpiresAt) {
+	if !leaseExpired(now, old.ExpiresAt) {
 		return TakeoverResponse{}, ErrConflict
 	}
 
@@ -134,7 +134,7 @@ func (s *UseCase) ExpireCredentials(ctx context.Context, at time.Time, limit int
 			continue
 		}
 		credential := s.credentials[req.CredentialID]
-		if credential == nil || credential.Status != credentialActive || at.Before(credential.ExpiresAt) {
+		if credential == nil || credential.Status != credentialActive || !leaseExpired(at, credential.ExpiresAt) {
 			continue
 		}
 		requestBackups[id] = *req
@@ -194,7 +194,7 @@ func (s *UseCase) CredentialAt(ctx context.Context, requestID string, at time.Ti
 	if !ok || credential.Status != credentialActive {
 		return Credential{}, false, nil
 	}
-	if at.Before(credential.CreatedAt) || !at.Before(credential.ExpiresAt) {
+	if at.Before(credential.CreatedAt) || leaseExpired(at, credential.ExpiresAt) {
 		return Credential{}, false, nil
 	}
 	return *credential, true, nil

@@ -63,7 +63,7 @@ func (s *Service) HangingExecutions(now time.Time) []Row {
 				continue
 			}
 		}
-		if now.After(t) {
+		if !now.Before(t) {
 			out = append(out, row)
 		}
 	}

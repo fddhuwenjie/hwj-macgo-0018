@@ -152,6 +152,15 @@ func (s *UseCase) nowFunc() time.Time {
 	}
 	return time.Now()
 }
+
+// leaseExpired is the single canonical expiry boundary shared by every entry
+// point in this package. A lease is usable while now is strictly before its
+// deadline and is expired once the deadline has been reached or passed, i.e.
+// expired iff now >= expiresAt. Routing all expiry checks through this helper
+// keeps the time boundary in one place and consistent with domain.Lease.IsExpired.
+func leaseExpired(now, expiresAt time.Time) bool {
+	return !now.Before(expiresAt)
+}
 func (s *UseCase) load(p Persister) {
 	data, err := p.Load()
 	if err != nil {
@@ -328,7 +337,7 @@ func (s *UseCase) Occupy(ctx context.Context, in OccupyRequest) (OccupyResponse,
 		if !ok {
 			return OccupyResponse{}, ErrNotFound
 		}
-		if now.Before(cred.ExpiresAt) {
+		if !leaseExpired(now, cred.ExpiresAt) {
 			return OccupyResponse{RequestID: req.ID, ID: req.ID, CredentialID: cred.ID, Generation: cred.Generation, Status: req.Status, Version: req.Version}, nil
 		}
 		gen := req.Generation + 1
@@ -418,7 +427,7 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 	if cred.Status != credentialActive {
 		return CommitResponse{}, ErrIllegalTransition
 	}
-	if now.After(cred.ExpiresAt) {
+	if leaseExpired(now, cred.ExpiresAt) {
 		return CommitResponse{}, ErrExpired
 	}
 	resultID := s.newID("result")
@@ -522,7 +531,7 @@ func (s *UseCase) FailRelease(ctx context.Context, in FailReleaseRequest) (FailR
 		return FailReleaseResponse{}, ErrConflict
 	}
 	now := s.nowFunc()
-	if now.After(cred.ExpiresAt) {
+	if leaseExpired(now, cred.ExpiresAt) {
 		cred.Status = credentialExpired
 	} else {
 		cred.Status = credentialReleased
@@ -559,7 +568,7 @@ func (s *UseCase) QueryRequests(ctx context.Context, q QueryRequest) (QueryRespo
 		return QueryResponse{}, err
 	}
 	s.mu.RLock()
-	now := time.Now()
+	now := s.nowFunc()
 	items := []Request{}
 	for _, req := range s.requests {
 		r := cloneRequest(req)
@@ -575,7 +584,7 @@ func (s *UseCase) QueryRequests(ctx context.Context, q QueryRequest) (QueryRespo
 		if q.Key != "" && r.Key != q.Key {
 			continue
 		}
-		if q.OnlyExpired && !now.After(r.LeaseExpiresAt) {
+		if q.OnlyExpired && !leaseExpired(now, r.LeaseExpiresAt) {
 			continue
 		}
 		items = append(items, r)
@@ -649,6 +658,25 @@ func (s *UseCase) FindRequest(ctx context.Context, id string) (Request, error) {
 		return Request{}, ErrNotFound
 	}
 	return out, nil
+}
+
+// FindCredential returns a credential by id regardless of its state. Unlike
+// CredentialAt it performs no expiry check, so callers (and tests) can inspect a
+// credential's persisted state and version even after a check has rejected it.
+func (s *UseCase) FindCredential(ctx context.Context, id string) (Credential, error) {
+	if err := s.checkContext(ctx); err != nil {
+		return Credential{}, err
+	}
+	if blank(id) {
+		return Credential{}, ErrInvalid
+	}
+	s.mu.RLock()
+	cred, ok := s.credentials[id]
+	s.mu.RUnlock()
+	if !ok {
+		return Credential{}, ErrNotFound
+	}
+	return *cred, nil
 }
 
 type ReplayHitRateResponse struct {
