@@ -5,12 +5,25 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hwj-macgo-0018/repository"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// CommitRequestVersion applies one optimistic update through a repository
+// transaction. Callers use it when multiple workers share a request record.
+func CommitRequestVersion(ctx context.Context, tx repository.Transaction, item repository.Item) error {
+	if tx == nil {
+		return repository.ErrInvalid
+	}
+	if err := tx.Put(item); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
 
 var (
 	ErrNotFound          = errors.New("application: not found")
