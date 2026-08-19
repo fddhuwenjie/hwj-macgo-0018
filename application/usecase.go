@@ -144,12 +144,7 @@ func (s *UseCase) newID(prefix string) string {
 	return fmt.Sprintf("%s-%d-%d", prefix, s.nowFunc().UnixNano(), n)
 }
 func (s *UseCase) keyScope(callerID, namespaceID, key string) string {
-	caller := strings.TrimSpace(callerID)
-	key = strings.TrimSpace(key)
-	if caller == "" || key == "" {
-		return ""
-	}
-	return caller + "/" + key
+	return callerID + "/" + namespaceID + "/" + key
 }
 func (s *UseCase) nowFunc() time.Time {
 	if s.now != nil {
