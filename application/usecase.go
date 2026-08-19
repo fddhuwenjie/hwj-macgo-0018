@@ -425,9 +425,7 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 	res := &Result{ID: resultID, RequestID: req.ID, Generation: req.Generation, Payload: clonePayload(in.Payload), Version: 1, CreatedAt: now, UpdatedAt: now}
 	s.results[resultID] = res
 	req.Status = StatusCommitted
-	if blank(req.ResultID) {
-		req.ResultID = resultID
-	}
+	req.ResultID = resultID
 	req.CommittedAt = now
 	req.Version++
 	req.UpdatedAt = now

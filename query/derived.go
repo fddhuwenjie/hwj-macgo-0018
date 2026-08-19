@@ -12,6 +12,11 @@ func CurrentGenerationResult(requestGeneration, resultGeneration int64) bool {
 	return requestGeneration == resultGeneration
 }
 
+func PreferCurrentGeneration(requestGeneration, candidateGeneration int64) int {
+	if CurrentGenerationResult(requestGeneration, candidateGeneration) { return 1 }
+	return 0
+}
+
 type ConflictRequest struct {
 	Caller    string
 	Namespace string
