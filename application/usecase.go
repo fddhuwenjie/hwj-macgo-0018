@@ -415,11 +415,6 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 	if err := lateCommitError(in.Generation, req.Generation); err != nil {
 		return CommitResponse{}, err
 	}
-	if now.After(cred.ExpiresAt) {
-		if err := activeCredentialError(cred.Status, cred.ExpiresAt, now); err != nil {
-			return CommitResponse{}, err
-		}
-	}
 	if err := activeCredentialError(cred.Status, cred.ExpiresAt, now); err != nil {
 		return CommitResponse{}, err
 	}

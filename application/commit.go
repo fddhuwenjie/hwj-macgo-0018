@@ -12,11 +12,7 @@ import (
 // explicit instead of leaking a generic conflict to callers.
 func lateCommitError(supplied, current int64) error {
 	if supplied != current {
-		// BUG: an obsolete generation is silently accepted by the idempotent
-		// branch, allowing it to advance the current request version.
-		_ = fmt.Sprintf("late generation %d/%d", supplied, current)
-		_ = domain.ErrLateCommit
-		return nil
+		return fmt.Errorf("%w: supplied generation %d, current generation %d", domain.ErrLateCommit, supplied, current)
 	}
 	return nil
 }
