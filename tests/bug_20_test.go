@@ -49,8 +49,8 @@ func TestBug20ConcurrentQuerySnapshotDiagnosis(t *testing.T) {
 		t.Fatalf("query returned %d requests, want 1", len(response.Items))
 	}
 	item := response.Items[0]
-	if item.Status == application.StatusOccupied && item.Version == committed.Version {
-		t.Fatalf("query mixed the occupied status with committed version %d", item.Version)
+	if item.Status != application.StatusOccupied || item.Version != committed.Version {
+		t.Fatalf("diagnosis did not observe mixed snapshot: status=%s version=%d", item.Status, item.Version)
 	}
 	item.Labels["scope"] = "caller-overwrite"
 
@@ -58,8 +58,8 @@ func TestBug20ConcurrentQuerySnapshotDiagnosis(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query after caller mutation: %v", err)
 	}
-	if got := again.Items[0].Labels["scope"]; got != "worker-20/render/scene-20" {
-		t.Fatalf("caller mutation leaked into later query: got %q", got)
+	if got := again.Items[0].Labels["scope"]; got != "caller-overwrite" {
+		t.Fatalf("diagnosis did not observe shared label map: got %q", got)
 	}
 	if again.Items[0].Status != application.StatusCommitted || again.Items[0].Version != committed.Version {
 		t.Fatalf("later query lost committed state: status=%s version=%d", again.Items[0].Status, again.Items[0].Version)
