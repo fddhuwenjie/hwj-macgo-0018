@@ -289,12 +289,19 @@ func (s *UseCase) Occupy(ctx context.Context, in OccupyRequest) (OccupyResponse,
 	if blank(in.RequestID) {
 		return OccupyResponse{}, ErrInvalid
 	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	req, ok := s.requests[in.RequestID]
 	if !ok {
 		return OccupyResponse{}, ErrNotFound
 	}
+	// Re-check the optimistic-lock version under the exclusive write lock. A
+	// read lock would let concurrent takeovers all observe the same version,
+	// each pass this check and each mint a fresh active credential for the same
+	// generation. Holding the write lock for the whole critical section closes
+	// the check-then-act window: the first contender advances the version, and
+	// every later contender sees the bumped version here and bails out before
+	// creating any credential.
 	if in.ExpectedVersion >= 0 && req.Version != in.ExpectedVersion {
 		return OccupyResponse{}, ErrOptimisticLock
 	}
@@ -308,6 +315,7 @@ func (s *UseCase) Occupy(ctx context.Context, in OccupyRequest) (OccupyResponse,
 		if blank(req.Digest) {
 			return OccupyResponse{}, ErrInvalid
 		}
+		requestBefore := *req
 		gen := req.Generation + 1
 		credID := s.newID("credential")
 		cred := &Credential{ID: credID, RequestID: req.ID, Generation: gen, Status: credentialActive, Version: 1, ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now}
@@ -318,7 +326,11 @@ func (s *UseCase) Occupy(ctx context.Context, in OccupyRequest) (OccupyResponse,
 		req.LeaseExpiresAt = cred.ExpiresAt
 		req.Version++
 		req.UpdatedAt = now
-		_ = s.persist()
+		if err := s.persist(); err != nil {
+			*req = requestBefore
+			delete(s.credentials, credID)
+			return OccupyResponse{}, fmt.Errorf("occupy persist: %w", ErrStoreFailed)
+		}
 		return OccupyResponse{RequestID: req.ID, ID: req.ID, CredentialID: credID, Generation: gen, Status: req.Status, Version: req.Version}, nil
 	case StatusOccupied:
 		if blank(req.CredentialID) {
@@ -331,6 +343,11 @@ func (s *UseCase) Occupy(ctx context.Context, in OccupyRequest) (OccupyResponse,
 		if now.Before(cred.ExpiresAt) {
 			return OccupyResponse{RequestID: req.ID, ID: req.ID, CredentialID: cred.ID, Generation: cred.Generation, Status: req.Status, Version: req.Version}, nil
 		}
+		// Lease expired: hand out the next generation. Snapshot the state first so
+		// that a persist failure rolls the request and the old credential back and
+		// drops the freshly minted one, leaving no extra active credential behind.
+		requestBefore := *req
+		credentialBefore := *cred
 		gen := req.Generation + 1
 		cred.Status = credentialExpired
 		cred.Version++
@@ -344,7 +361,12 @@ func (s *UseCase) Occupy(ctx context.Context, in OccupyRequest) (OccupyResponse,
 		req.LeaseExpiresAt = newCred.ExpiresAt
 		req.Version++
 		req.UpdatedAt = now
-		_ = s.persist()
+		if err := s.persist(); err != nil {
+			*req = requestBefore
+			*cred = credentialBefore
+			delete(s.credentials, newCredID)
+			return OccupyResponse{}, fmt.Errorf("occupy persist: %w", ErrStoreFailed)
+		}
 		return OccupyResponse{RequestID: req.ID, ID: req.ID, CredentialID: newCredID, Generation: gen, Status: req.Status, Version: req.Version}, nil
 	case StatusCommitted:
 		return OccupyResponse{}, ErrIllegalTransition
