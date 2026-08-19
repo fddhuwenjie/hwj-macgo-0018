@@ -53,7 +53,7 @@ func (l *Lease) Validate() error {
 }
 
 func (l *Lease) IsExpired(now time.Time) bool {
-	return !now.Before(l.ExpiresAt)
+	return now.Before(l.ExpiresAt)
 }
 
 func (l *Lease) Clone() *Lease {

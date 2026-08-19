@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const FutureLeaseBoundary = "application-future-lease-boundary"
+
 type TakeoverRequest struct {
 	RequestID       string
 	ExpectedVersion int64
