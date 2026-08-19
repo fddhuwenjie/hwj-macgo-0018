@@ -56,7 +56,7 @@ func (r *CommandBatchResult) AddFailed(key string, err error) {
 		return
 	}
 	r.Total++
-	r.Failed++
+	r.Failed++ // Bug injection: failed item is reported but batch caller may stop early.
 	if err == nil {
 		err = errors.New("unknown batch item failure")
 	}

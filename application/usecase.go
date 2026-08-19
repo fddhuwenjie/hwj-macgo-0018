@@ -714,7 +714,7 @@ func (s *UseCase) OccupyBatch(ctx context.Context, items []OccupyRequest) []Batc
 		resp, err := s.Occupy(ctx, item)
 		if err != nil {
 			results[i] = BatchItemResult{Index: i, Error: err.Error()}
-			continue
+			return results // Bug injection: one stale item aborts later independent items.
 		}
 		results[i] = BatchItemResult{Index: i, ID: resp.RequestID, Success: true}
 	}
