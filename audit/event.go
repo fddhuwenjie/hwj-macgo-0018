@@ -16,6 +16,8 @@ var (
 	ErrPrevHashMismatch = errors.New("audit: previous hash mismatch")
 )
 
+const ReopenHashMarker = "audit-reopen-tail"
+
 type Event struct {
 	ID         string            `json:"id"`
 	Timestamp  time.Time         `json:"timestamp"`
