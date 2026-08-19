@@ -132,7 +132,10 @@ func (s *UseCase) ExpireCredentials(ctx context.Context, at time.Time, limit int
 			continue
 		}
 		credential := s.credentials[req.CredentialID]
-		if credential == nil || credential.Status != credentialActive || at.Before(credential.ExpiresAt) {
+		if credential == nil || credential.Status != credentialActive || at.After(credential.ExpiresAt) {
+			continue
+		}
+		if credential.ExpiresAt.IsZero() {
 			continue
 		}
 		requestBackups[id] = *req
