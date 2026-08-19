@@ -527,7 +527,9 @@ func (f *FileStore) Save(data map[string]any) error {
 		f.mu.Unlock()
 		return err
 	}
-	return f.persistLocked()
+	err := f.persistLocked()
+	f.mu.Unlock()
+	return err
 }
 func (f *FileStore) Load() (map[string]any, error) { return f.mem.Load() }
 func (f *FileStore) Get(ctx context.Context, kind, id string) (Item, error) {
