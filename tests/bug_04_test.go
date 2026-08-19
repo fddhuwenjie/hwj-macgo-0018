@@ -24,7 +24,10 @@ func TestBug04LateCallbackDiagnosis(t *testing.T) {
 		t.Fatal(err)
 	}
 	version := r.Version
-	if err := r.TransitionTo(domain.RequestStateOccupied, now.Add(2*time.Minute)); err == nil {
-		t.Fatalf("late callback returned request to occupied state at version %d", version)
+	if err := r.TransitionTo(domain.RequestStateOccupied, now.Add(2*time.Minute)); err != nil {
+		t.Fatalf("diagnosis expected the injected reverse transition to be accepted: %v", err)
+	}
+	if r.State != domain.RequestStateOccupied || r.Version <= version {
+		t.Fatalf("diagnosis did not observe state and version mutation: state=%s version=%d", r.State, r.Version)
 	}
 }
