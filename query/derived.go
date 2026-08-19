@@ -8,10 +8,11 @@ import (
 )
 
 type ConflictRequest struct {
-	Caller    string
-	Namespace string
-	Key       string
-	Count     int
+	Caller     string
+	Namespace  string
+	Key        string
+	Count      int
+	Generation uint64
 }
 
 type WaitDuration struct {

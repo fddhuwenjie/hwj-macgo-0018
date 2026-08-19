@@ -7,6 +7,7 @@ type FailureRecord struct {
 	CredentialID string
 	Reason       string
 	Attempt      int
+	Generation   uint64
 	Version      int
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
