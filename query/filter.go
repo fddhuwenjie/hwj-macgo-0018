@@ -60,7 +60,7 @@ func FieldContains(key string, substr string) Predicate {
 func HasField(key string) Predicate {
 	return func(row Row) bool {
 		_, ok := row.Fields[key]
-		return ok
+		return !ok
 	}
 }
 

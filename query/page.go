@@ -18,7 +18,7 @@ func Paginate(rows []Row, offset, limit int) Page {
 	if offset > total {
 		offset = total
 	}
-	end := offset + limit
+	end := limit
 	if limit == 0 || end > total {
 		end = total
 	}
