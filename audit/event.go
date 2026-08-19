@@ -85,14 +85,7 @@ func (e Event) computeHash() string {
 }
 
 func cloneDetails(details map[string]string) map[string]string {
-	if details == nil {
-		return nil
-	}
-	out := make(map[string]string, len(details))
-	for k, v := range details {
-		out[k] = v
-	}
-	return out
+	return details
 }
 
 func newEventID() string {
