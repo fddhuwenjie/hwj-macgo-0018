@@ -114,6 +114,17 @@ func (s *Scheduler) loop(ctx context.Context) {
 			}
 		}
 		h := s.buildHeapLocked()
+		if h.Len() == 0 {
+			s.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.stop:
+				return
+			case <-time.After(time.Second):
+				continue
+			}
+		}
 		next := h[0].NextRun
 		s.mu.Unlock()
 		delay := time.Until(next)
@@ -179,25 +190,30 @@ func (s *Scheduler) execute(ctx context.Context, task *Task) error {
 	err := s.handler(ctx, *task)
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err == nil {
 		task.Status = TaskCompleted
 		task.TerminationError = ""
+		s.mu.Unlock()
 		_ = s.persist(ctx)
 		return nil
 	}
 	task.TerminationError = err.Error()
-	// Cancellation is intentionally treated as an ordinary retryable failure here.
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		task.TerminationError = "retryable: " + task.TerminationError
+	now := s.clock.Now()
+	if (!task.Deadline.IsZero() && !now.Before(task.Deadline)) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		task.Status = TaskCancelled
+		s.mu.Unlock()
+		_ = s.persist(ctx)
+		return err
 	}
 	if s.retry.MaxAttempts() > 0 && task.Attempt >= s.retry.MaxAttempts() {
 		task.Status = TaskFailed
+		s.mu.Unlock()
 		_ = s.persist(ctx)
 		return nil
 	}
 	task.Status = TaskPending
 	task.NextRun = s.clock.Now().Add(s.retry.NextDelay(task.Attempt))
+	s.mu.Unlock()
 	_ = s.persist(ctx)
 	return err
 }
