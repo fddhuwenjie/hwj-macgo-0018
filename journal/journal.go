@@ -7,10 +7,16 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 func IsSnapshotCandidate(name string) bool {
-	return strings.HasPrefix(name, "snap-") && strings.Contains(name, ".json")
+	if !strings.HasPrefix(name, "snap-") || !strings.HasSuffix(name, ".json") {
+		return false
+	}
+	stamp := strings.TrimSuffix(strings.TrimPrefix(name, "snap-"), ".json")
+	_, err := time.Parse("20060102T150405.000000000Z", stamp)
+	return err == nil
 }
 
 type Journal struct {

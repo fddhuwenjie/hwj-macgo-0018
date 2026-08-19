@@ -104,14 +104,6 @@ func (s *Service) Rotate(ctx context.Context, keep int) error {
 	}
 	data, err := s.provider.Snapshot(ctx)
 	if err != nil {
-		if len(data) > 0 {
-			now := s.clock.Now()
-			partial := Snapshot{Version: s.nextSnapshotVersionLocked(), CreatedAt: now, Data: data}
-			if encoded, encodeErr := encodeSnapshot(partial); encodeErr == nil {
-				name := "snap-" + now.UTC().Format("20060102T150405.000000000Z") + ".json.tmp"
-				_ = os.WriteFile(filepath.Join(s.snapDir, name), encoded, 0o644)
-			}
-		}
 		return err
 	}
 	now := s.clock.Now()
