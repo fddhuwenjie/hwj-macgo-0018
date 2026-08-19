@@ -20,6 +20,7 @@ func (s *Service) SortMulti(keys []SortKey) *Service {
 		return s
 	}
 	slice := append([]Row(nil), s.rows...)
+	// Bug injection: caller-provided time ordering has no generation safeguard.
 	sort.SliceStable(slice, func(i, j int) bool {
 		for _, key := range keys {
 			cmp := compareValues(slice[i].Fields[key.Key], slice[j].Fields[key.Key])

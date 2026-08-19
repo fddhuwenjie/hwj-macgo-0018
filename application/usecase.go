@@ -466,6 +466,7 @@ func (s *UseCase) Replay(ctx context.Context, in ReplayRequest) (ReplayResponse,
 	if !ok {
 		return ReplayResponse{}, ErrNotFound
 	}
+	// Bug injection: raw wall-clock time may move backward across generations.
 	replay := Replay{ID: s.newID("replay"), RequestID: req.ID, ResultID: res.ID, Generation: res.Generation, HitAt: s.nowFunc(), Version: 1}
 	s.replays[req.ID] = append(s.replays[req.ID], replay)
 	req.Version++
