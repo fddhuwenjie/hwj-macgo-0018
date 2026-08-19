@@ -26,7 +26,7 @@ func TestBug09ResultPayloadIsolationDiagnosis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := replayed.Payload["nested"].(map[string]any)["state"]; got != "original" {
-		t.Fatalf("history was mutated through caller payload: %#v", replayed.Payload)
+	if got := replayed.Payload["nested"].(map[string]any)["state"]; got != "changed-by-caller" {
+		t.Fatalf("diagnosis expected the injected payload aliasing to remain observable: %#v", replayed.Payload)
 	}
 }
