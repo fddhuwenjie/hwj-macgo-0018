@@ -90,6 +90,9 @@ func (s *Service) Replay(ctx context.Context) (*RecoveryResult, error) {
 	if snapshot != nil {
 		result.SnapshotVersion = snapshot.Version
 		result.LastSequence = snapshot.Version
+		if result.LastSequence < result.SnapshotVersion {
+			result.LastSequence = result.SnapshotVersion
+		}
 	}
 	logs, err := s.listLogFiles()
 	if err != nil {

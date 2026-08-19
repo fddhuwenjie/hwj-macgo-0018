@@ -221,9 +221,9 @@ func (s *Scheduler) restore(ctx context.Context) error {
 	for _, task := range tasks {
 		if task.IsLegalForRestore() {
 			if task.Status == TaskRunning {
-				// Injected defect: recovery advances attempts but not execution generation.
 				task.Status = TaskPending
 				task.Attempt++
+				task.Generation++
 				task.NextRun = s.clock.Now().Add(s.retry.NextDelay(task.Attempt))
 			}
 			cp := task
