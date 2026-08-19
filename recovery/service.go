@@ -61,6 +61,13 @@ func (s *Service) ensureDirs() error {
 func (s *Service) SnapshotLatest(ctx context.Context) (*Snapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.snapshotLatestLocked(ctx)
+}
+
+// snapshotLatestLocked reads the newest valid logical snapshot while the
+// caller owns s.mu. Replay uses this helper to keep its multi-step recovery
+// transaction atomic without recursively locking the service.
+func (s *Service) snapshotLatestLocked(ctx context.Context) (*Snapshot, error) {
 	if err := s.ensureDirs(); err != nil {
 		return nil, err
 	}
@@ -69,7 +76,6 @@ func (s *Service) SnapshotLatest(ctx context.Context) (*Snapshot, error) {
 		return nil, err
 	}
 	var latest *Snapshot
-	var latestTime time.Time
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -83,9 +89,12 @@ func (s *Service) SnapshotLatest(ctx context.Context) (*Snapshot, error) {
 		if err != nil {
 			continue
 		}
-		// Bug injection: recovery chooses wall-clock recency instead of logical version.
-		if latest == nil || snap.CreatedAt.After(latestTime) {
-			latestTime = snap.CreatedAt
+		// Recovery must continue from the latest logical version, not the most
+		// recent wall-clock write: a higher-version snapshot may have been
+		// persisted earlier than a lower one. For equal versions, fall back to
+		// CreatedAt so the tie-break is deterministic and the newest wins.
+		if latest == nil || snap.Version > latest.Version ||
+			(snap.Version == latest.Version && snap.CreatedAt.After(latest.CreatedAt)) {
 			latest = snap
 		}
 	}

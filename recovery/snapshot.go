@@ -44,8 +44,13 @@ func (s *FileSnapshotStore) List(ctx context.Context) ([]Snapshot, error) {
 		}
 		snapshots = append(snapshots, *snap)
 	}
-	sort.Slice(snapshots, func(i, j int) bool {
-		// Bug injection: list ordering follows timestamps and can disagree with versions.
+	// Order by logical version so callers always recover from the newest
+	// version; timestamps only break ties between equal versions, keeping the
+	// sort stable and consistent with SnapshotLatest (newest version last).
+	sort.SliceStable(snapshots, func(i, j int) bool {
+		if snapshots[i].Version != snapshots[j].Version {
+			return snapshots[i].Version < snapshots[j].Version
+		}
 		return snapshots[i].CreatedAt.Before(snapshots[j].CreatedAt)
 	})
 	return snapshots, nil

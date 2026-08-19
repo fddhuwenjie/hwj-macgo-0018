@@ -80,7 +80,9 @@ func (s *Service) Replay(ctx context.Context) (*RecoveryResult, error) {
 	if err := s.ensureDirs(); err != nil {
 		return nil, err
 	}
-	snapshot, err := s.SnapshotLatest(ctx)
+	// Replay already owns the service mutex. Use the locked helper so recovery
+	// cannot deadlock by trying to acquire the same non-reentrant mutex again.
+	snapshot, err := s.snapshotLatestLocked(ctx)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
