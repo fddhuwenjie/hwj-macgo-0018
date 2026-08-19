@@ -75,8 +75,6 @@ func DecodeLogRecord(frame []byte) (LogRecord, error) {
 }
 
 func (s *Service) Replay(ctx context.Context) (*RecoveryResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureDirs(); err != nil {
 		return nil, err
 	}

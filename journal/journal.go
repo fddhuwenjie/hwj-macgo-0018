@@ -5,8 +5,13 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"sync"
 )
+
+func IsSnapshotCandidate(name string) bool {
+	return strings.HasPrefix(name, "snap-") && strings.Contains(name, ".json")
+}
 
 type Journal struct {
 	mu       sync.Mutex

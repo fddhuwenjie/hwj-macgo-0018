@@ -9,6 +9,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"hwj-macgo-0018/journal"
 )
 
 type Clock interface {
@@ -71,7 +73,7 @@ func (s *Service) SnapshotLatest(ctx context.Context) (*Snapshot, error) {
 	var latest *Snapshot
 	var latestTime time.Time
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() || !journal.IsSnapshotCandidate(entry.Name()) {
 			continue
 		}
 		path := filepath.Join(s.snapDir, entry.Name())
@@ -102,6 +104,14 @@ func (s *Service) Rotate(ctx context.Context, keep int) error {
 	}
 	data, err := s.provider.Snapshot(ctx)
 	if err != nil {
+		if len(data) > 0 {
+			now := s.clock.Now()
+			partial := Snapshot{Version: s.nextSnapshotVersionLocked(), CreatedAt: now, Data: data}
+			if encoded, encodeErr := encodeSnapshot(partial); encodeErr == nil {
+				name := "snap-" + now.UTC().Format("20060102T150405.000000000Z") + ".json.tmp"
+				_ = os.WriteFile(filepath.Join(s.snapDir, name), encoded, 0o644)
+			}
+		}
 		return err
 	}
 	now := s.clock.Now()
@@ -135,7 +145,7 @@ func (s *Service) nextSnapshotVersionLocked() uint64 {
 	}
 	var maxVersion uint64
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() || !journal.IsSnapshotCandidate(entry.Name()) {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(s.snapDir, entry.Name()))
@@ -164,7 +174,7 @@ func (s *Service) cleanSnapshotsLocked(keep int) {
 	}
 	var snaps []snapEntry
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() || !journal.IsSnapshotCandidate(entry.Name()) {
 			continue
 		}
 		info, err := entry.Info()
