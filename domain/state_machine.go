@@ -19,6 +19,7 @@ var requestTransitions = map[RequestState]map[RequestState]bool{
 	RequestStateTakenOver: {
 		RequestStateCommitted: true,
 		RequestStateExpired:   true,
+		RequestStateOccupied:  true,
 	},
 	RequestStateCommitted: {},
 	RequestStateExpired:   {},

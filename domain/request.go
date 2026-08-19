@@ -72,7 +72,11 @@ func (r *Request) TransitionTo(next RequestState, now time.Time) error {
 		return err
 	}
 	r.State = next
+	r.Version++
 	r.UpdatedAt = now
+	if r.Version < 1 {
+		r.Version = 1
+	}
 	return nil
 }
 
