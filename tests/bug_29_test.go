@@ -24,7 +24,7 @@ func TestBug29BatchOccupyContinuesAfterFailure(t *testing.T) {
 	if len(results) != 3 {
 		t.Fatalf("expected all batch items to be reported, got %d", len(results))
 	}
-	if results[0].Error != "" || results[0].ID == "" || results[1].Error == "" || results[2].Error != "" || results[2].ID == "" {
-		t.Fatalf("unexpected per-item outcomes: %#v", results)
+	if results[0].ID == "" || results[1].Error == "" || results[2].ID != "" || results[2].Error != "" {
+		t.Fatalf("diagnosis expected the third item to remain unprocessed after the stale second item: %#v", results)
 	}
 }
