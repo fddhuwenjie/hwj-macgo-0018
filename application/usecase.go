@@ -432,7 +432,9 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 	cred.Status = credentialCommitted
 	cred.Version++
 	cred.UpdatedAt = now
-	_ = s.persist()
+	if err := s.persistCommitState(); err != nil {
+		return CommitResponse{}, err
+	}
 	return CommitResponse{RequestID: req.ID, ID: req.ID, ResultID: resultID, Status: req.Status, Version: req.Version, Hit: false}, nil
 }
 
