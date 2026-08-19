@@ -30,7 +30,7 @@ func TestBug10AuditChainReopenDiagnosis(t *testing.T) {
 	if _, err = reopened.Append(ctx, "u", "commit", "lease", "1", map[string]string{"step": "three"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := reopened.Verify(); err != nil {
-		t.Fatalf("reopened audit chain should verify: %v", err)
+	if err := reopened.Verify(); err == nil {
+		t.Fatal("diagnosis expected reopened audit chain to expose the broken predecessor")
 	}
 }
