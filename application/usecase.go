@@ -425,9 +425,12 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 	res := &Result{ID: resultID, RequestID: req.ID, Generation: req.Generation, Payload: clonePayload(in.Payload), Version: 1, CreatedAt: now, UpdatedAt: now}
 	s.results[resultID] = res
 	req.Status = StatusCommitted
-	if blank(req.ResultID) {
-		req.ResultID = resultID
-	}
+	// A fresh commit for the current generation supersedes any stale result
+	// pointer left behind by a previous generation after timeout takeover.
+	// The old snapshot stays immutable in s.results for history, but the
+	// request's current-result reference must point at the latest generation so
+	// replay always returns the current execution's payload.
+	req.ResultID = resultID
 	req.CommittedAt = now
 	req.Version++
 	req.UpdatedAt = now
