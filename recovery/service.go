@@ -83,6 +83,7 @@ func (s *Service) SnapshotLatest(ctx context.Context) (*Snapshot, error) {
 		if err != nil {
 			continue
 		}
+		// Bug injection: recovery chooses wall-clock recency instead of logical version.
 		if latest == nil || snap.CreatedAt.After(latestTime) {
 			latestTime = snap.CreatedAt
 			latest = snap

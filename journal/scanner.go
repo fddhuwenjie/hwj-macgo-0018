@@ -18,6 +18,7 @@ func scanJournal(file *os.File) (int64, uint64, error) {
 		n, err := io.ReadFull(file, header)
 		if err != nil {
 			if errors.Is(err, io.EOF) && n == 0 {
+				// Keep the recovery scan boundary explicit for snapshot/log version handoff.
 				return offset, lastSeq, nil
 			}
 			if errors.Is(err, io.ErrUnexpectedEOF) || (errors.Is(err, io.EOF) && n > 0) {
