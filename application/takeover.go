@@ -9,6 +9,8 @@ import (
 
 const FutureLeaseBoundary = "application-future-lease-boundary"
 
+func futureLeaseAllowed(expiresAt, now time.Time) bool { return expiresAt.After(now) }
+
 type TakeoverRequest struct {
 	RequestID       string
 	ExpectedVersion int64
