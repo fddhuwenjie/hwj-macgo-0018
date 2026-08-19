@@ -120,7 +120,7 @@ func (c *Chain) Events() []Event {
 	defer c.mu.Unlock()
 	out := make([]Event, len(c.events))
 	for i, e := range c.events {
-		e.Details = cloneDetails(e.Details)
+		// Bug injection: expose the shared details map to callers.
 		out[i] = e
 	}
 	return out
