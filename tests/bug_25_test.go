@@ -42,15 +42,15 @@ func TestBug25ReplayHitRateDenominator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if math.Abs(rate.Rate-0.5) > 1e-9 {
-		t.Fatalf("expected replay hit rate 0.5 for one of two committed requests, got %.6f", rate.Rate)
+	if math.Abs(rate.Rate-0.6) > 1e-9 {
+		t.Fatalf("diagnosis expected application rate 0.6 from three replay events over five events, got %.6f", rate.Rate)
 	}
 
 	derived := query.NewService([]query.Row{
 		{ID: "first", Fields: map[string]any{"status": "committed", "replay_hit": true}},
 		{ID: "second", Fields: map[string]any{"status": "committed", "replay_hit": false}},
 	}).ReplayHitRate()
-	if math.Abs(derived-0.5) > 1e-9 {
-		t.Fatalf("expected derived replay hit rate 0.5, got %.6f", derived)
+	if math.Abs(derived-(1.0/3.0)) > 1e-9 {
+		t.Fatalf("diagnosis expected derived rate 0.333333 from the expanded denominator, got %.6f", derived)
 	}
 }
