@@ -406,7 +406,9 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 		}
 		req.Version++
 		req.UpdatedAt = now
-		_ = s.persist()
+		if err := s.persistReplayWithContext(ctx); err != nil {
+			return CommitResponse{}, err
+		}
 		return CommitResponse{RequestID: req.ID, ID: req.ID, ResultID: res.ID, Status: req.Status, Version: req.Version, Hit: true}, nil
 	}
 	if req.Status != StatusOccupied {

@@ -4,7 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hwj-macgo-0018/repository"
 )
+
+// persistReplayWithContext exposes the cancellation boundary used by an
+// idempotent replay after its in-memory version has already advanced.
+func (s *UseCase) persistReplayWithContext(ctx context.Context) error {
+	return repository.SaveThenCheckContext(ctx, s.persist)
+}
 
 // ScopeTransaction is a minimal transaction handle returned by a
 // ScopeTransactionManager. Application services use this contract instead of
