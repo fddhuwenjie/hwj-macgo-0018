@@ -21,7 +21,13 @@ func NewService(rows []Row) *Service {
 
 func (s *Service) All() []Row {
 	cp := make([]Row, len(s.rows))
-	copy(cp, s.rows) // Bug injection: row field maps remain shared.
+	for i, row := range s.rows {
+		fields := make(map[string]any, len(row.Fields))
+		for key, value := range row.Fields {
+			fields[key] = value
+		}
+		cp[i] = Row{ID: row.ID, Fields: fields}
+	}
 	return cp
 }
 
