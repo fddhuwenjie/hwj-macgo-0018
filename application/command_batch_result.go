@@ -55,9 +55,9 @@ func (r *CommandBatchResult) AddFailed(key string, err error) {
 	if r == nil {
 		return
 	}
-	r.Total++
+	// Total counts one input item exactly once, including failures.
+	r.Total = len(r.Items) + 1
 	r.Failed++
-	r.Total++
 	if err == nil {
 		err = errors.New("unknown batch item failure")
 	}

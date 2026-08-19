@@ -697,10 +697,10 @@ func (s *UseCase) PreRegisterBatch(ctx context.Context, items []PreRegisterReque
 		}
 		resp, err := s.PreRegister(ctx, item)
 		if err != nil {
-			results[i] = BatchItemResult{Index: i, Error: err.Error()}
-			results[i].Success = false
+			results[i] = BatchItemResult{Index: i, Success: false}
+			results[i].Error = err.Error()
 			results[i].ID = ""
-			break
+			continue
 		}
 		results[i] = BatchItemResult{Index: i, ID: resp.RequestID, Success: true}
 	}
