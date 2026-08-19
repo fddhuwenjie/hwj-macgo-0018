@@ -394,8 +394,8 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 	}
 	now := s.nowFunc()
 	if req.Status == StatusCommitted {
-		if in.Generation != req.Generation {
-			return CommitResponse{}, ErrConflict
+		if err := lateCommitError(in.Generation, req.Generation); err != nil {
+			return CommitResponse{}, err
 		}
 		if blank(req.ResultID) {
 			return CommitResponse{}, ErrNotFound
@@ -412,14 +412,16 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 	if req.Status != StatusOccupied {
 		return CommitResponse{}, ErrIllegalTransition
 	}
-	if in.Generation != req.Generation {
-		return CommitResponse{}, ErrConflict
-	}
-	if cred.Status != credentialActive {
-		return CommitResponse{}, ErrIllegalTransition
+	if err := lateCommitError(in.Generation, req.Generation); err != nil {
+		return CommitResponse{}, err
 	}
 	if now.After(cred.ExpiresAt) {
-		return CommitResponse{}, ErrExpired
+		if err := activeCredentialError(cred.Status, cred.ExpiresAt, now); err != nil {
+			return CommitResponse{}, err
+		}
+	}
+	if err := activeCredentialError(cred.Status, cred.ExpiresAt, now); err != nil {
+		return CommitResponse{}, err
 	}
 	resultID := s.newID("result")
 	res := &Result{ID: resultID, RequestID: req.ID, Generation: req.Generation, Payload: clonePayload(in.Payload), Version: 1, CreatedAt: now, UpdatedAt: now}
