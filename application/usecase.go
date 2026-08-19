@@ -309,12 +309,17 @@ func (s *UseCase) Occupy(ctx context.Context, in OccupyRequest) (OccupyResponse,
 			return OccupyResponse{}, ErrInvalid
 		}
 		gen := req.Generation + 1
+		retainedFailure := req.FailureReason
+		if req.Status == StatusReleased || req.Status == StatusFailed {
+			gen, retainedFailure = retryState(req.Generation, "")
+		}
 		credID := s.newID("credential")
 		cred := &Credential{ID: credID, RequestID: req.ID, Generation: gen, Status: credentialActive, Version: 1, ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now}
 		s.credentials[credID] = cred
 		req.CredentialID = credID
 		req.Generation = gen
 		req.Status = StatusOccupied
+		req.FailureReason = retainedFailure
 		req.LeaseExpiresAt = cred.ExpiresAt
 		req.Version++
 		req.UpdatedAt = now
