@@ -9,8 +9,13 @@ import (
 	"sync"
 )
 
+// IsSnapshotCandidate reports whether a directory entry is a committed
+// snapshot that may participate in recovery and version selection. A snapshot
+// is committed only once its temp file has been renamed into place, so the
+// trailing ".json" suffix is required: a leftover "snap-*.json.tmp" from a
+// failed or interrupted write must never be treated as a recovery point.
 func IsSnapshotCandidate(name string) bool {
-	return strings.HasPrefix(name, "snap-") && strings.Contains(name, ".json")
+	return strings.HasPrefix(name, "snap-") && strings.HasSuffix(name, ".json")
 }
 
 type Journal struct {

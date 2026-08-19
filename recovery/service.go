@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -102,16 +103,16 @@ func (s *Service) Rotate(ctx context.Context, keep int) error {
 	if err := s.ensureDirs(); err != nil {
 		return err
 	}
+	// A previous rotation that crashed between writing and renaming the temp
+	// file leaves a stale ".json.tmp" candidate. Clear such leftovers before a
+	// new rotation so a failed snapshot never participates in version selection
+	// and the next rotation continues from the correct (last complete) version.
+	s.removeStaleTempSnapshotsLocked()
 	data, err := s.provider.Snapshot(ctx)
 	if err != nil {
-		if len(data) > 0 {
-			now := s.clock.Now()
-			partial := Snapshot{Version: s.nextSnapshotVersionLocked(), CreatedAt: now, Data: data}
-			if encoded, encodeErr := encodeSnapshot(partial); encodeErr == nil {
-				name := "snap-" + now.UTC().Format("20060102T150405.000000000Z") + ".json.tmp"
-				_ = os.WriteFile(filepath.Join(s.snapDir, name), encoded, 0o644)
-			}
-		}
+		// A failed snapshot source must not leave a recovery candidate behind:
+		// partial data would otherwise displace the last complete snapshot and
+		// cause replay to skip the valid logs that follow it.
 		return err
 	}
 	now := s.clock.Now()
@@ -127,15 +128,35 @@ func (s *Service) Rotate(ctx context.Context, keep int) error {
 	name := "snap-" + now.UTC().Format("20060102T150405.000000000Z") + ".json"
 	tmp := filepath.Join(s.snapDir, name+".tmp")
 	if err := os.WriteFile(tmp, encoded, 0o644); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := os.Rename(tmp, filepath.Join(s.snapDir, name)); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
 	if keep > 0 {
 		s.cleanSnapshotsLocked(keep)
 	}
 	return nil
+}
+
+// removeStaleTempSnapshotsLocked deletes leftover "snap-*.json.tmp" files left
+// behind by a rotation that failed or was interrupted before the rename. It is
+// called under s.mu so it cannot race with an in-progress rotation.
+func (s *Service) removeStaleTempSnapshotsLocked() {
+	entries, err := os.ReadDir(s.snapDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(entry.Name(), ".tmp") {
+			_ = os.Remove(filepath.Join(s.snapDir, entry.Name()))
+		}
+	}
 }
 
 func (s *Service) nextSnapshotVersionLocked() uint64 {
