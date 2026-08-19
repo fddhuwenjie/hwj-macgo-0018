@@ -19,6 +19,19 @@ func CommitRequestVersion(ctx context.Context, tx repository.Transaction, item r
 	if tx == nil {
 		return repository.ErrInvalid
 	}
+	if ctx == nil {
+		return repository.ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	current, err := tx.Get(item.Kind, item.ID)
+	if err != nil {
+		return err
+	}
+	if item.Version != current.Version+1 {
+		return repository.ErrOptimisticLock
+	}
 	if err := tx.Put(item); err != nil {
 		return err
 	}
