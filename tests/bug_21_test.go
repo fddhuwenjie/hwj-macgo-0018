@@ -35,7 +35,7 @@ func TestBug21RecoveryAcrossLogFiles(t *testing.T) {
 		t.Errorf("expected all five records through sequence 5, got applied=%d last=%d", result.Applied, result.LastSequence)
 	}
 	if result.Truncated {
-		t.Fatal("a segment beginning with the next global sequence must not be marked for truncation")
+		t.Errorf("a segment beginning with the next global sequence must not be marked for truncation")
 	}
 	info, err := os.Stat(secondPath)
 	if err != nil {
@@ -52,7 +52,7 @@ func TestBug21RecoveryAcrossLogFiles(t *testing.T) {
 		t.Fatalf("replay after reopen: %v", err)
 	}
 	if again.Applied != 5 || again.LastSequence != 5 || again.Truncated {
-		t.Fatalf("reopened result changed: %+v", again)
+		t.Errorf("reopened result changed: %+v", again)
 	}
 
 	thirdPath := filepath.Join(service.LogDir(), "0003.log")
@@ -64,7 +64,7 @@ func TestBug21RecoveryAcrossLogFiles(t *testing.T) {
 		t.Fatalf("detect sequence gap: %v", err)
 	}
 	if !withGap.Truncated || withGap.Applied != 5 || withGap.LastSequence != 5 {
-		t.Fatalf("gap must preserve the five-record prefix: %+v", withGap)
+		t.Errorf("gap must preserve the five-record prefix: %+v", withGap)
 	}
 	if firstInfo, err := os.Stat(firstPath); err != nil || firstInfo.Size() != int64(len(first)) {
 		t.Fatalf("first segment changed after gap: info=%v err=%v", firstInfo, err)
@@ -81,7 +81,7 @@ func TestBug21RecoveryAcrossLogFiles(t *testing.T) {
 		t.Fatalf("replay corrected continuation: %v", err)
 	}
 	if afterCorrection.Applied != 6 || afterCorrection.LastSequence != 6 || afterCorrection.Truncated {
-		t.Fatalf("legal continuation after rejected gap failed: %+v", afterCorrection)
+		t.Errorf("legal continuation after rejected gap failed: %+v", afterCorrection)
 	}
 }
 
