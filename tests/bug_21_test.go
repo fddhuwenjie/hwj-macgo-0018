@@ -32,7 +32,7 @@ func TestBug21RecoveryAcrossLogFiles(t *testing.T) {
 		t.Fatalf("replay two contiguous segments: %v", err)
 	}
 	if result.Applied != 5 || result.LastSequence != 5 {
-		t.Fatalf("expected all five records through sequence 5, got applied=%d last=%d", result.Applied, result.LastSequence)
+		t.Errorf("expected all five records through sequence 5, got applied=%d last=%d", result.Applied, result.LastSequence)
 	}
 	if result.Truncated {
 		t.Fatal("a segment beginning with the next global sequence must not be marked for truncation")
