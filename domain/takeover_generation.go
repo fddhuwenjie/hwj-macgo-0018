@@ -2,6 +2,16 @@ package domain
 
 import "time"
 
+// ValidateCommitGeneration classifies callbacks at the takeover boundary.
+func ValidateCommitGeneration(supplied, current int64) error {
+	// BUG-03: only a future generation is rejected; an obsolete generation is
+	// allowed to flow into application state and idempotent commit handling.
+	if supplied > current {
+		return ErrLateCommit
+	}
+	return nil
+}
+
 type TakeoverGeneration struct {
 	ID           string
 	CredentialID string
