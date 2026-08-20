@@ -8,9 +8,15 @@ import (
 )
 
 // SequenceContinues reports whether a record can follow the last record seen
-// while scanning a directory of journal segments.
-func SequenceContinues(previous, current uint64, firstInFile bool) bool {
-	if firstInFile {
+// while scanning a directory of journal segments. Continuity is defined solely
+// by the global sequence: the very first record of a replay must be sequence 1,
+// and every subsequent record — whether it begins a new segment file or follows
+// one within the same file — must advance the previous sequence by exactly one.
+// File boundaries are intentionally irrelevant so that a log split across several
+// segment files is recovered as a single continuous stream rather than treating
+// each segment's first record as a fresh restart.
+func SequenceContinues(previous, current uint64) bool {
+	if previous == 0 {
 		return current == 1
 	}
 	return current == previous+1
