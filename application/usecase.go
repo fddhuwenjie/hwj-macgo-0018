@@ -437,6 +437,40 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 }
 
 type ReplayRequest struct{ RequestID string }
+
+// PrepareGenerationForReplay advances a completed request to its next execution generation.
+func (s *UseCase) PrepareGenerationForReplay(requestID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.requests[requestID]
+	if !ok {
+		return ErrNotFound
+	}
+	if r.Status != StatusCommitted {
+		return ErrIllegalTransition
+	}
+	requestBefore := *r
+	r.Status = StatusOccupied
+	r.Generation++
+	r.Version++
+	var credentialBefore Credential
+	credential := s.credentials[r.CredentialID]
+	if credential != nil {
+		credentialBefore = *credential
+		credential.Status = credentialActive
+		credential.Generation = r.Generation
+		credential.Version++
+	}
+	if err := s.persist(); err != nil {
+		*r = requestBefore
+		if credential != nil {
+			*credential = credentialBefore
+		}
+		return fmt.Errorf("prepare replay generation: %w", ErrStoreFailed)
+	}
+	return nil
+}
+
 type ReplayResponse struct {
 	RequestID  string
 	ID         string
