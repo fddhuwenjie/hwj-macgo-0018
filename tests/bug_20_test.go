@@ -25,14 +25,14 @@ func TestBug20ConcurrentQuerySnapshotDiagnosis(t *testing.T) {
 		t.Fatalf("occupy request: %v", err)
 	}
 
-	queryDone := make(chan application.QueryResponse, 1)
+	type queryResult struct {
+		response application.QueryResponse
+		err      error
+	}
+	queryDone := make(chan queryResult, 1)
 	go func() {
 		response, queryErr := service.QueryRequests(ctx, application.QueryRequest{CallerID: "worker-20"})
-		if queryErr != nil {
-			queryDone <- application.QueryResponse{}
-			return
-		}
-		queryDone <- response
+		queryDone <- queryResult{response: response, err: queryErr}
 	}()
 	time.Sleep(2 * time.Millisecond)
 	committed, err := service.Commit(ctx, application.CommitRequest{
@@ -44,13 +44,18 @@ func TestBug20ConcurrentQuerySnapshotDiagnosis(t *testing.T) {
 		t.Fatalf("commit request while query copies snapshot: %v", err)
 	}
 
-	response := <-queryDone
+	result := <-queryDone
+	if result.err != nil {
+		t.Fatalf("query while commit is in flight: %v", result.err)
+	}
+	response := result.response
 	if len(response.Items) != 1 {
-		t.Fatalf("query returned %d requests, want 1", len(response.Items))
+		t.Errorf("query returned %d requests, want 1", len(response.Items))
+		return
 	}
 	item := response.Items[0]
 	if item.Status == application.StatusOccupied && item.Version == committed.Version {
-		t.Fatalf("query mixed the occupied status with committed version %d", item.Version)
+		t.Errorf("query mixed the occupied status with committed version %d", item.Version)
 	}
 	item.Labels["scope"] = "caller-overwrite"
 
@@ -58,10 +63,14 @@ func TestBug20ConcurrentQuerySnapshotDiagnosis(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query after caller mutation: %v", err)
 	}
+	if len(again.Items) != 1 {
+		t.Errorf("query after caller mutation returned %d requests, want 1", len(again.Items))
+		return
+	}
 	if got := again.Items[0].Labels["scope"]; got != "worker-20/render/scene-20" {
-		t.Fatalf("caller mutation leaked into later query: got %q", got)
+		t.Errorf("caller mutation leaked into later query: got %q", got)
 	}
 	if again.Items[0].Status != application.StatusCommitted || again.Items[0].Version != committed.Version {
-		t.Fatalf("later query lost committed state: status=%s version=%d", again.Items[0].Status, again.Items[0].Version)
+		t.Errorf("later query lost committed state: status=%s version=%d", again.Items[0].Status, again.Items[0].Version)
 	}
 }
