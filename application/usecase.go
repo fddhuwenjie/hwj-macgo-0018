@@ -394,12 +394,8 @@ func (s *UseCase) Commit(ctx context.Context, in CommitRequest) (CommitResponse,
 	}
 	now := s.nowFunc()
 	if req.Status == StatusCommitted {
-		// BUG-03: an obsolete credential bypasses the generation classifier in
-		// the idempotent branch and can advance the current request version.
-		if in.CredentialID == req.CredentialID {
-			if err := lateCommitError(in.Generation, req.Generation); err != nil {
-				return CommitResponse{}, err
-			}
+		if err := lateCommitError(in.Generation, req.Generation); err != nil {
+			return CommitResponse{}, err
 		}
 		if blank(req.ResultID) {
 			return CommitResponse{}, ErrNotFound
