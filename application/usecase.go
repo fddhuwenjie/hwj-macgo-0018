@@ -22,7 +22,14 @@ func CommitRequestVersion(ctx context.Context, tx repository.Transaction, item r
 	if err := tx.Put(item); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		// BUG-16: the application reports a version loser as successful.
+		if errors.Is(err, repository.ErrOptimisticLock) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 var (
