@@ -392,8 +392,13 @@ func (t *memoryTransaction) Commit(ctx context.Context) error {
 				snapExists = true
 			}
 		}
-		// BUG-16: the current record is not compared with the transaction
-		// snapshot, so two workers can publish the same next version.
+		if curExists && snapExists {
+			current := t.mem.items[kind][id]
+			snapshot := t.snapshot[kind][id]
+			if current.Version != snapshot.Version {
+				return ErrOptimisticLock
+			}
+		}
 		if !curExists && snapExists {
 			return ErrOptimisticLock
 		}
