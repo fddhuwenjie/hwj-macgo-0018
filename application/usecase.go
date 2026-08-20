@@ -697,10 +697,12 @@ func (s *UseCase) PreRegisterBatch(ctx context.Context, items []PreRegisterReque
 		}
 		resp, err := s.PreRegister(ctx, item)
 		if err != nil {
+			// A per-item failure (e.g. a digest conflict) must not abort the
+			// rest of the batch. Record the real outcome and keep going so the
+			// caller can see exactly which items succeeded and retry only the
+			// rest idempotently.
 			results[i] = BatchItemResult{Index: i, Error: err.Error()}
-			results[i].Success = false
-			results[i].ID = ""
-			break
+			continue
 		}
 		results[i] = BatchItemResult{Index: i, ID: resp.RequestID, Success: true}
 	}

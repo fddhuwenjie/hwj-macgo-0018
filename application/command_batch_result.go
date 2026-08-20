@@ -32,12 +32,14 @@ type CommandBatchResult struct {
 	Items     []CommandItemResult
 }
 
-// NewCommandBatchResult allocates a result with the expected total size.
+// NewCommandBatchResult allocates a result pre-sized for total items. total is
+// only a capacity hint; the counts are driven entirely by AddSucceeded and
+// AddFailed, so Total always equals len(Items) and never double-counts.
 func NewCommandBatchResult(total int) *CommandBatchResult {
 	if total < 0 {
 		total = 0
 	}
-	return &CommandBatchResult{Total: total, Items: make([]CommandItemResult, 0, total)}
+	return &CommandBatchResult{Items: make([]CommandItemResult, 0, total)}
 }
 
 // AddSucceeded records a successful item.
@@ -57,7 +59,6 @@ func (r *CommandBatchResult) AddFailed(key string, err error) {
 	}
 	r.Total++
 	r.Failed++
-	r.Total++
 	if err == nil {
 		err = errors.New("unknown batch item failure")
 	}
