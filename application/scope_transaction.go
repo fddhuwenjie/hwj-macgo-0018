@@ -60,9 +60,15 @@ func (r *ScopeRunner) Run(ctx context.Context, fn ScopeTransactionFunc) (err err
 	if fnErr := fn(ctx); fnErr != nil {
 		rollbackErr := tx.Rollback(ctx)
 		if rollbackErr != nil {
+			// A rollback failure is secondary to the original cause; keep the
+			// primary error's identity intact so callers can still match it
+			// with errors.Is/As (e.g. context.Canceled).
 			return NewAppExecError(AppExecErrorKindUnavailable, "scope_transaction.Rollback", combineErrors(fnErr, rollbackErr))
 		}
-		return NewAppExecError(AppExecErrorKindUnavailable, "scope_transaction.Run", fmt.Errorf("%v", fnErr))
+		// Wrap fnErr directly instead of flattening it to a string, so the
+		// cancellation identity (context.Canceled / context.DeadlineExceeded)
+		// survives the transaction boundary and a caller can errors.Is it.
+		return NewAppExecError(classifyRunError(fnErr), "scope_transaction.Run", fnErr)
 	}
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
@@ -103,5 +109,14 @@ func combineErrors(primary, secondary error) error {
 	if secondary == nil {
 		return primary
 	}
-	return fmt.Errorf("%v; rollback: %v", primary, secondary)
+	// Wrap the primary cause with %w so its identity is preserved even when a
+	// rollback failure is reported alongside it.
+	return fmt.Errorf("%w; rollback: %v", primary, secondary)
+}
+
+func classifyRunError(err error) AppExecErrorKind {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return AppExecErrorKindCancelled
+	}
+	return AppExecErrorKindUnavailable
 }

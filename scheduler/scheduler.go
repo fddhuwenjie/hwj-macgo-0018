@@ -102,7 +102,8 @@ func (s *Scheduler) loop(ctx context.Context) {
 	defer s.wg.Done()
 	for {
 		s.mu.Lock()
-		if len(s.tasks) == 0 {
+		h := s.buildHeapLocked()
+		if h.Len() == 0 {
 			s.mu.Unlock()
 			select {
 			case <-ctx.Done():
@@ -113,7 +114,6 @@ func (s *Scheduler) loop(ctx context.Context) {
 				continue
 			}
 		}
-		h := s.buildHeapLocked()
 		next := h[0].NextRun
 		s.mu.Unlock()
 		delay := time.Until(next)
@@ -173,33 +173,47 @@ func (s *Scheduler) execute(ctx context.Context, task *Task) error {
 	if task.Deadline.IsZero() {
 		task.Deadline = s.clock.Now().Add(time.Minute)
 	}
+	deadline := task.Deadline
 	s.mu.Unlock()
 	_ = s.persist(ctx)
 
-	err := s.handler(ctx, *task)
+	taskCtx, cancel := context.WithDeadline(ctx, deadline)
+	err := s.handler(taskCtx, *task)
+	cancel()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err == nil {
 		task.Status = TaskCompleted
 		task.TerminationError = ""
-		_ = s.persist(ctx)
+		_ = s.persistLocked(ctx)
 		return nil
 	}
-	task.TerminationError = err.Error()
-	// Cancellation is intentionally treated as an ordinary retryable failure here.
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		task.TerminationError = "retryable: " + task.TerminationError
+	if isCancellation(err) {
+		if ctx.Err() != nil {
+			task.Status = TaskPending
+			task.TerminationError = ""
+			_ = s.persistLocked(ctx)
+			return err
+		}
+		task.Status = TaskCancelled
+		task.TerminationError = err.Error()
+		_ = s.persistLocked(ctx)
+		return err
 	}
 	if s.retry.MaxAttempts() > 0 && task.Attempt >= s.retry.MaxAttempts() {
 		task.Status = TaskFailed
-		_ = s.persist(ctx)
+		_ = s.persistLocked(ctx)
 		return nil
 	}
 	task.Status = TaskPending
 	task.NextRun = s.clock.Now().Add(s.retry.NextDelay(task.Attempt))
-	_ = s.persist(ctx)
+	_ = s.persistLocked(ctx)
 	return err
+}
+
+func isCancellation(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 func (s *Scheduler) restore(ctx context.Context) error {
@@ -213,7 +227,6 @@ func (s *Scheduler) restore(ctx context.Context) error {
 		if task.IsLegalForRestore() {
 			if task.Status == TaskRunning {
 				task.Status = TaskPending
-				task.Attempt++
 				task.NextRun = s.clock.Now().Add(s.retry.NextDelay(task.Attempt))
 			}
 			cp := task
@@ -226,6 +239,10 @@ func (s *Scheduler) restore(ctx context.Context) error {
 func (s *Scheduler) persist(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.persistLocked(ctx)
+}
+
+func (s *Scheduler) persistLocked(ctx context.Context) error {
 	tasks := make([]Task, 0, len(s.tasks))
 	for _, task := range s.tasks {
 		tasks = append(tasks, *task)
