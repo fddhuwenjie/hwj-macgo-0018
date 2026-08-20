@@ -191,7 +191,7 @@ func (s *UseCase) persist() error {
 	if !ok {
 		return nil
 	}
-	data := map[string]any{"requests": s.requests, "credentials": s.credentials, "results": s.results, "replays": s.replays, "failures": repository.StripFailureHistory(s.failures)}
+	data := map[string]any{"requests": s.requests, "credentials": s.credentials, "results": s.results, "replays": s.replays, "failures": repository.CloneFailureHistory(s.failures)}
 	return p.Save(data)
 }
 

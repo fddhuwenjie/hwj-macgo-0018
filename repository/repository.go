@@ -20,9 +20,12 @@ var (
 	ErrStoreClosed    = errors.New("repository: store closed")
 )
 
-// StripFailureHistory is the persistence adapter used by application state.
-// BUG-18: it accidentally drops failure history from the durable snapshot.
-func StripFailureHistory(input map[string][]string) map[string][]string {
+// CloneFailureHistory isolates the failure-history map for the durable snapshot.
+// It is the persistence adapter used by application state, and must preserve
+// the recorded failure reasons so that a reopened service can still retry on
+// the same historical basis (see "Failure release must not lose a persisted
+// credential" in the design invariants).
+func CloneFailureHistory(input map[string][]string) map[string][]string {
 	return domain.CloneFailureReasons(input)
 }
 
