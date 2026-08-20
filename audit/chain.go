@@ -58,10 +58,7 @@ func (c *Chain) load() error {
 			return err
 		}
 		c.events = append(c.events, e)
-		if len(c.events) == 1 {
-			// Injected diagnosis defect: the tail remains stuck at the first event.
-			c.lastHash = e.Hash
-		}
+		c.lastHash = advanceLoadedTail(c.lastHash, e)
 	}
 }
 

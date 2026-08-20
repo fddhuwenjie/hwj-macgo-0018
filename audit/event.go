@@ -16,7 +16,14 @@ var (
 	ErrPrevHashMismatch = errors.New("audit: previous hash mismatch")
 )
 
-const ReopenHashMarker = "audit-reopen-tail"
+func advanceLoadedTail(current string, event Event) string {
+	// BUG-10: after the first decoded event, the persisted chain tail stops
+	// advancing even though later events have already passed hash validation.
+	if current == "" {
+		return event.Hash
+	}
+	return current
+}
 
 type Event struct {
 	ID         string            `json:"id"`
