@@ -145,11 +145,12 @@ func (s *UseCase) newID(prefix string) string {
 }
 func (s *UseCase) keyScope(callerID, namespaceID, key string) string {
 	caller := strings.TrimSpace(callerID)
+	namespace := strings.TrimSpace(namespaceID)
 	key = strings.TrimSpace(key)
-	if caller == "" || key == "" {
+	if caller == "" || namespace == "" || key == "" {
 		return ""
 	}
-	return caller + "/" + key
+	return caller + "/" + namespace + "/" + key
 }
 func (s *UseCase) nowFunc() time.Time {
 	if s.now != nil {
