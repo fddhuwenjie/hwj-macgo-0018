@@ -56,7 +56,7 @@ func TestBug23DeadlineStopsRetry(t *testing.T) {
 		t.Errorf("cancellation identity was lost across the transaction boundary: %v", err)
 	}
 
-	clock := bug23Clock{now: time.Now()}
+	clock := realClock{}
 	store := &bug23Store{}
 	var mu sync.Mutex
 	attempts := 0
@@ -87,8 +87,21 @@ func TestBug23DeadlineStopsRetry(t *testing.T) {
 	}
 	select {
 	case <-started:
-		t.Fatalf("deadline cancellation was retried; attempts=%d", attempts)
+		mu.Lock()
+		gotAttempts := attempts
+		mu.Unlock()
+		t.Errorf("deadline cancellation was retried; attempts=%d", gotAttempts)
 	case <-time.After(20 * time.Millisecond):
+	}
+	persisted, loadErr := store.Load(context.Background())
+	if loadErr != nil {
+		t.Errorf("load deadline task state: %v", loadErr)
+	} else {
+		for _, task := range persisted {
+			if task.ID == "deadline-23" && (task.Status != scheduler.TaskCancelled || task.Attempt != 1) {
+				t.Errorf("deadline task was not terminal after cancellation: status=%s attempt=%d", task.Status, task.Attempt)
+			}
+		}
 	}
 }
 
@@ -145,5 +158,15 @@ func TestBug23CancelledTaskNotResumedAfterRestart(t *testing.T) {
 	}
 	if runs["inflight-23"] != 1 {
 		t.Errorf("in-flight task ran %d times after restart, want 1", runs["inflight-23"])
+	}
+	tasks, err := store.Load(context.Background())
+	if err != nil {
+		t.Errorf("load persisted attempts: %v", err)
+	} else {
+		for _, task := range tasks {
+			if task.ID == "inflight-23" && task.Attempt != 4 {
+				t.Errorf("restored task attempt was %d, want 4", task.Attempt)
+			}
+		}
 	}
 }
