@@ -158,27 +158,74 @@ func itemsToData(items map[string]map[string]Item) map[string]any {
 	return map[string]any{"items": cloneItems(items)}
 }
 
+// cloneAnyMap returns a deep copy of an arbitrary JSON-shaped map. The
+// persisted blob is a map[string]any whose values may be maps, slices or
+// pointers (the application stores map[string]*Request and similar), so a
+// JSON round-trip is the only generic way to isolate it from caller-owned
+// state. A nil map yields an empty non-nil map.
+func cloneAnyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return map[string]any{}
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return map[string]any{}
+	}
+	out := map[string]any{}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return map[string]any{}
+	}
+	return out
+}
+
 type MemoryStore struct {
 	mu    sync.RWMutex
 	items map[string]map[string]Item
+	// data is the persisted blob and the source of truth for the Persister
+	// (Load/Save) contract. The application stores its own state under
+	// arbitrary keys (requests, credentials, ...) here. The typed Item API
+	// (Get/Put/...) continues to operate on items, which is mirrored into
+	// data["items"] by syncItemsLocked so both views stay consistent.
+	data map[string]any
 }
 
-func NewMemoryStore() *MemoryStore { return &MemoryStore{items: map[string]map[string]Item{}} }
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{items: map[string]map[string]Item{}, data: map[string]any{}}
+}
+
+// syncItemsLocked mirrors the typed-API items back into the persisted blob
+// under the "items" key. The caller must hold m.mu.
+func (m *MemoryStore) syncItemsLocked() {
+	if m.data == nil {
+		m.data = map[string]any{}
+	}
+	if len(m.items) == 0 {
+		delete(m.data, "items")
+		return
+	}
+	m.data["items"] = itemsToData(m.items)["items"]
+}
+
 func (m *MemoryStore) Load() (map[string]any, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return itemsToData(m.items), nil
+	return cloneAnyMap(m.data), nil
 }
 func (m *MemoryStore) Save(data map[string]any) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	items, ok, err := itemsFromData(data)
+	if data == nil {
+		data = map[string]any{}
+	}
+	// The blob is the source of truth: persist the whole map verbatim so
+	// the application's own keys (requests, credentials, ...) survive a
+	// close/reopen, then refresh the typed-API cache from data["items"].
+	m.data = cloneAnyMap(data)
+	items, _, err := itemsFromData(m.data)
 	if err != nil {
 		return err
 	}
-	if ok {
-		m.items = items
-	}
+	m.items = items
 	return nil
 }
 func (m *MemoryStore) Get(ctx context.Context, kind, id string) (Item, error) {
@@ -225,6 +272,7 @@ func (m *MemoryStore) Put(ctx context.Context, item Item) (Item, error) {
 	item.UpdatedAt = now
 	saved := cloneItem(item)
 	kindItems[item.ID] = saved
+	m.syncItemsLocked()
 	return cloneItem(saved), nil
 }
 func (m *MemoryStore) Delete(ctx context.Context, kind, id string) error {
@@ -244,6 +292,7 @@ func (m *MemoryStore) Delete(ctx context.Context, kind, id string) error {
 	if len(kindItems) == 0 {
 		delete(m.items, kind)
 	}
+	m.syncItemsLocked()
 	return nil
 }
 func (m *MemoryStore) List(ctx context.Context, kind string) ([]Item, error) {
@@ -445,6 +494,9 @@ func (t *memoryTransaction) Commit(ctx context.Context) error {
 			delete(t.mem.items, kind)
 		}
 	}
+	// The transaction wrote straight into t.mem.items, so mirror the result
+	// back into the persisted blob before the caller persists.
+	t.mem.syncItemsLocked()
 	t.changed = map[string]string{}
 	t.deleted = map[string]string{}
 	return nil
@@ -478,23 +530,32 @@ func NewFileStore(path string) (*FileStore, error) {
 	return fs, nil
 }
 func (f *FileStore) load() error {
-	data, err := os.ReadFile(f.file)
+	raw, err := os.ReadFile(f.file)
 	if os.IsNotExist(err) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	var items map[string]map[string]Item
-	if err := json.Unmarshal(data, &items); err != nil {
+	// The on-disk file is the persisted blob (map[string]any). The
+	// application stores its own keys (requests, credentials, ...) at the
+	// top level; the typed Item API uses the "items" sub-key. Restoring the
+	// whole map keeps every caller's state recoverable across a reopen.
+	f.mem.mu.Lock()
+	defer f.mem.mu.Unlock()
+	var data map[string]any
+	if err := json.Unmarshal(raw, &data); err != nil {
 		return err
 	}
-	if items == nil {
-		items = map[string]map[string]Item{}
+	if data == nil {
+		data = map[string]any{}
 	}
-	f.mem.mu.Lock()
+	f.mem.data = data
+	items, _, err := itemsFromData(f.mem.data)
+	if err != nil {
+		return err
+	}
 	f.mem.items = items
-	f.mem.mu.Unlock()
 	return nil
 }
 func (f *FileStore) persistLocked() error {
@@ -502,7 +563,7 @@ func (f *FileStore) persistLocked() error {
 		return nil
 	}
 	f.mem.mu.RLock()
-	data, err := json.Marshal(f.mem.items)
+	data, err := json.Marshal(f.mem.data)
 	f.mem.mu.RUnlock()
 	if err != nil {
 		return err
@@ -582,8 +643,17 @@ func (f *FileStore) Begin(ctx context.Context) (Transaction, error) {
 func (f *FileStore) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.closed {
+		return nil
+	}
+	// Flush the current blob to disk before marking the store closed;
+	// persistLocked refuses to write once closed is set, so the flush must
+	// happen first or the final in-memory state would be lost.
+	if err := f.persistLocked(); err != nil {
+		return err
+	}
 	f.closed = true
-	return f.persistLocked()
+	return nil
 }
 
 type fileTransaction struct {
